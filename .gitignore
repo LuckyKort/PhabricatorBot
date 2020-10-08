@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+*.xml
+/timastamp.txt
+/timestamp.txt
+/.DS_Store
+.idea/
