@@ -27,27 +27,6 @@ bot = telebot.AsyncTeleBot(tgkey)
 _timestamp = None
 stop_threads = False
 
-# @bot.message_handler(commands=['config'])
-# def configuration(message):
-#     markup = telebot.types.ReplyKeyboardMarkup(row_width=3)
-#     markup.add(telebot.types.InlineKeyboardButton("Ввести ключ API для Phabricator", callback_data="phabkey"))
-#     markup.add(telebot.types.InlineKeyboardButton("Ввести ID чата", callback_data="chatid"))
-#     markup.add(telebot.types.InlineKeyboardButton("Ввести ID борда", callback_data="boardid"))
-#     bot.send_message(message.chat.id, 'Привет! Выбери действие:', reply_markup=markup)
-#
-#
-# @bot.callback_query_handler(func=lambda call: True)
-# def query_handler(call):
-#     if call == "phabkey":
-#         conf = etree.open('config.xml')
-#         conf[1].text = call
-#     if call == "chatid":
-#         conf = etree.open('config.xml')
-#         conf[2].text = call
-#     if call == "boardid":
-#         conf = etree.open('config.xml')
-#         conf[3].text = call
-
 
 @bot.message_handler(commands=['getchatid'])
 def setup(message):
