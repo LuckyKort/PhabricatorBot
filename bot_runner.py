@@ -21,11 +21,11 @@ server = config[3].text
 board = config[4].text
 ignoredphid = config[6].text
 
-
 bot = telebot.AsyncTeleBot(tgkey)
 
 _timestamp = None
 stop_threads = False
+new_ids = []
 
 
 @bot.message_handler(commands=['getchatid'])
@@ -35,8 +35,7 @@ def setup(message):
 
 class GetTasks:
     def __init__(self):
-        self.__last_time = None
-        __last_time = config[5].text
+        self.__last_time = config[5].text
         return
 
     @staticmethod
@@ -47,7 +46,8 @@ class GetTasks:
             ts = int(datetime.timestamp(now_local)) - 10
             return ts
         except Exception as e:
-            return print("Произошла ошибка при получении времени: ", e)
+            print("Произошла ошибка при получении времени: ", e)
+            return None
 
     @staticmethod
     def __whois(phid):
@@ -66,7 +66,8 @@ class GetTasks:
             else:
                 return {'username': "Не определен", 'realname': "Не определен"}
         except Exception as e:
-            return 'При получении имени пользователя произошла ошибка: ', e
+            print('При получении имени пользователя произошла ошибка: ', e)
+            return None
 
     @staticmethod
     def __gettaskname(task_id):
@@ -84,7 +85,8 @@ class GetTasks:
             else:
                 return "Неизвестен"
         except Exception as e:
-            return 'При получении имени пользователя произошла ошибка: ', e
+            print('При получении имени таска произошла ошибка: ', e)
+            return None
 
     @staticmethod
     def __getcolname(phid):
@@ -104,49 +106,63 @@ class GetTasks:
             else:
                 return "Неизвестен"
         except Exception as e:
-            return 'При получении имени колонки произошла ошибка: ', e
+            print('При получении имени колонки произошла ошибка: ', e)
+            return None
+
+    @staticmethod
+    def __getpriority(value):
+        try:
+            task_prior = {
+                10: ("интересный", "интересным", "интересного"),
+                25: ("низкий", "низким", "низкого"),
+                50: ("средний", "средним", "среднего"),
+                80: ("высокий", "высоким", "высокого"),
+                90: ("требующий уточнения", "требующим уточнения", "требущего уточнения"),
+                100: ("срочный", "срочным", "срочного")
+            }.get(value, ("неопределенный", "неопределенным", "неопределенного"))
+            return task_prior
+        except Exception as e:
+            print('При получении приоритета произошла ошибка: ', e)
+            return None
 
     @staticmethod
     def __parse_results(json_dict, act):
-        if act == "new":
-            new_tasks = {}
-            if len(json_dict['result']['data']) > 0:
-                for i in range(len(json_dict['result']['data'])):
-                    task_id = json_dict['result']['data'][i]['id']
-                    task_name = json_dict['result']['data'][i]['fields']['name']
-                    prior = json_dict['result']['data'][i]['fields']['priority']['name']
-                    task_prior = {
-                        'Low': "низким",
-                        'Normal': "средним",
-                        'High': "высоким",
-                        'Unbreak Now!': "срочным",
-                        'Needs Triage': "требующим уточнения",
-                        'Whishlist': "интересным"
-                    }.get(prior, "неопределенным")
-                    owner = json_dict['result']['data'][i]['fields']['ownerPHID']
-                    author = json_dict['result']['data'][i]['fields']['authorPHID']
-                    task_owner = GetTasks.__whois(owner)['realname']
-                    task_author = GetTasks.__whois(author)['realname']
-                    task_summary = {"task_id": task_id,
-                                    "name": task_name,
-                                    "priority": task_prior,
-                                    "owner": task_owner,
-                                    "author": task_author
-                                    }
-                    new_tasks[i] = task_summary
-                return new_tasks
-            else:
-                return None
+        try:
+            if act == "new":
+                new_tasks = {}
+                if len(json_dict['result']['data']) > 0:
+                    for i in range(len(json_dict['result']['data'])):
+                        task_id = json_dict['result']['data'][i]['id']
+                        task_name = json_dict['result']['data'][i]['fields']['name']
+                        prior = json_dict['result']['data'][i]['fields']['priority']['value']
+                        task_prior = GetTasks.__getpriority(prior)[1]
+                        owner = json_dict['result']['data'][i]['fields']['ownerPHID']
+                        author = json_dict['result']['data'][i]['fields']['authorPHID']
+                        task_owner = GetTasks.__whois(owner)['realname']
+                        task_author = GetTasks.__whois(author)['realname']
+                        task_summary = {"task_id": task_id,
+                                        "name": task_name,
+                                        "priority": task_prior,
+                                        "owner": task_owner,
+                                        "author": task_author
+                                        }
+                        new_tasks[i] = task_summary
+                    return new_tasks
+                else:
+                    return None
 
-        elif act == "upd":
-            upd_tasks = {}
-            if len(json_dict['result']['data']) > 0:
-                for i in range(len(json_dict['result']['data'])):
-                    task_id = json_dict['result']['data'][i]['id']
-                    upd_tasks[i] = task_id
-                return upd_tasks
-            else:
-                return None
+            elif act == "upd":
+                upd_tasks = {}
+                if len(json_dict['result']['data']) > 0:
+                    for i in range(len(json_dict['result']['data'])):
+                        task_id = json_dict['result']['data'][i]['id']
+                        upd_tasks[i] = task_id
+                    return upd_tasks
+                else:
+                    return None
+        except Exception as e:
+            print('При парсинге результатов произошла ошибка: ', e)
+            return None
 
     @staticmethod
     def __getupdates(ids, task_time):
@@ -164,13 +180,11 @@ class GetTasks:
                     curr_id = str(ids[i])
                     curr_num = 0
                     for j in range(len(task['result'][curr_id])):
-                        if int(task['result'][curr_id][j]['dateCreated']) > task_time:
+                        if task['result'][curr_id][j]['dateCreated'] > task_time:
                             if task['result'][curr_id][j]['transactionType'] == "reassign":
                                 task_id = task['result'][curr_id][j]['taskID']
-                                rfrom = task['result'][curr_id][j]['oldValue']
-                                rto = task['result'][curr_id][j]['newValue']
-                                oldowner = GetTasks.__whois(rfrom)['realname']
-                                newowner = GetTasks.__whois(rto)['realname']
+                                oldowner = GetTasks.__whois(task['result'][curr_id][j]['oldValue'])['realname']
+                                newowner = GetTasks.__whois(task['result'][curr_id][j]['newValue'])['realname']
                                 name = GetTasks.__gettaskname(task['result'][curr_id][j]['taskID'])
                                 upd_summary[curr_num] = {"action": "reassign",
                                                          "name": name,
@@ -191,6 +205,19 @@ class GetTasks:
                                                              "column": column['column'],
                                                              "project": column['project']}
                                     curr_num += curr_num
+
+                            if task['result'][curr_id][j]['transactionType'] == "priority":
+                                task_id = task['result'][curr_id][j]['taskID']
+                                old_prior = GetTasks.__getpriority(task['result'][curr_id][j]['oldValue'])[2]
+                                new_prior = GetTasks.__getpriority(task['result'][curr_id][j]['newValue'])[0]
+                                name = GetTasks.__gettaskname(task['result'][curr_id][j]['taskID'])
+                                upd_summary[curr_num] = {"action": "priority",
+                                                         "name": name,
+                                                         "task_id": task_id,
+                                                         "old_prior": old_prior,
+                                                         "new_prior": new_prior}
+                                curr_num += curr_num
+
                 if len(upd_summary) > 0:
                     return upd_summary
                 else:
@@ -198,53 +225,67 @@ class GetTasks:
             else:
                 return None
         except Exception as e:
-            return 'При получении обновлений произошла ошибка: ', e
+            print('При получении обновлений произошла ошибка: ', e)
+            return None
 
     @staticmethod
     def __send_results(results, chat_id, act):
+        global new_ids
         assert (results and len(results))
         if act == "new":
-            for i in range(len(results)):
+            for result in results.values():
                 print('Обнаружен новый таск!')
-                resultstr = 'На борде появился новый таск с {0} приоритетом: \n \U0001F4CA "{1}" \n' \
-                            '\U0001F425 Инициатор: {2}\n' \
-                            '\U0001F425 Исполнителем назначен(-а) {3}\n' \
-                            '\U0001F449 <a href ="{4}}/T{5}">Открыть таск</a>'.format(
-                                                                                                results[i]['priority'],
-                                                                                                results[i]['name'],
-                                                                                                results[i]['author'],
-                                                                                                results[i]['owner'],
-                                                                                                server,
-                                                                                                results[i]['task_id']
-                                                                                                )
+                resultstr = 'На борде появился новый таск с <b>{0}</b> приоритетом: \n \U0001F4CA <b>"{1}"</b> \n' \
+                            '\U0001F425 Инициатор: <b>{2}</b>\n' \
+                            '\U0001F425 Исполнитель: <b>{3}</b>\n' \
+                            '\U0001F449 <a href ="{4}/T{5}">Открыть таск</a>'.format(result['priority'],
+                                                                                     result['name'],
+                                                                                     result['author'],
+                                                                                     result['owner'],
+                                                                                     server,
+                                                                                     result['task_id']
+                                                                                     )
                 bot.send_message(chat_id, resultstr, parse_mode='HTML')
+                new_ids.append(int(result['task_id']))
 
         elif act == "upd":
-            for i in range(len(results)):
-                print('Обнаружен обновленный таск!')
+            updated_tasks = [res for res in results.values() if int(res['task_id']) not in new_ids]
+            if len(updated_tasks) == 0:
+                print('Обновленных тасков нет')
 
-                if results[i]['action'] == "reassign":
-                    resultstr = 'В таске \U0001F4CA "{0}" был изменен исполнитель: \n' \
-                                '\U0001F425 Предыдущий исполнитель: {1}\n' \
-                                '\U0001F425 Новый исполнитель: {2}\n' \
-                                '\U0001F449 <a href ="{3}/T{4}">Открыть таск</a>'.format(
-                                                                                            results[i]['name'],
-                                                                                            results[i]['oldowner'],
-                                                                                            results[i]['newowner'],
-                                                                                            server,
-                                                                                            results[i]['task_id']
-                                                                                            )
+            for result in updated_tasks:
+                print('Обнаружен обновленный таск!')
+                if result['action'] == "reassign":
+                    resultstr = 'В таске \U0001F4CA <b>"{0}"</b> был изменен исполнитель: \n' \
+                                '\U0001F425 Предыдущий исполнитель: <b>{1}</b>\n' \
+                                '\U0001F425 Новый исполнитель: <b>{2}</b>\n' \
+                                '\U0001F449 <a href ="{3}/T{4}">Открыть таск</a>'.format(result['name'],
+                                                                                         result['oldowner'],
+                                                                                         result['newowner'],
+                                                                                         server,
+                                                                                         result['task_id']
+                                                                                         )
                     bot.send_message(chat_id, resultstr, parse_mode='HTML')
 
-                if results[i]['action'] == "move":
-                    resultstr = 'Таск \U0001F4CA "{0}" перемещен в колонку "{1}" на борде "{2}"\n' \
-                                '\U0001F449 <a href ="{3}/T{4}">Открыть таск</a>'.format(
-                                                                                            results[i]['name'],
-                                                                                            results[i]['column'],
-                                                                                            results[i]['project'],
-                                                                                            server,
-                                                                                            results[i]['task_id']
-                                                                                            )
+                if result['action'] == "move":
+                    resultstr = 'Таск \U0001F4CA <b>"{0}"</b> перемещен в колонку <b>"{1}"</b> на борде "{2}"\n' \
+                                '\U0001F449 <a href ="{3}/T{4}">Открыть таск</a>'.format(result['name'],
+                                                                                         result['column'],
+                                                                                         result['project'],
+                                                                                         server,
+                                                                                         result['task_id']
+                                                                                         )
+                    bot.send_message(chat_id, resultstr, parse_mode='HTML')
+
+                if result['action'] == "priority":
+                    resultstr = 'В таске \U0001F4CA <b>"{0}"</b> изменен приоритет ' \
+                                'с <b>"{1}"</b> на <b>"{2}"</b>\n' \
+                                '\U0001F449 <a href ="{3}/T{4}">Открыть таск</a>'.format(result['name'],
+                                                                                         result['old_prior'],
+                                                                                         result['new_prior'],
+                                                                                         server,
+                                                                                         result['task_id']
+                                                                                         )
                     bot.send_message(chat_id, resultstr, parse_mode='HTML')
 
     def tasks_search(self, chat_id):
@@ -253,24 +294,20 @@ class GetTasks:
 
         url = '{0}/api/maniphest.search'.format(server)
 
-        print(strftime("%H:%M:%S", localtime(self.__timestamp())) + ' - Проверяю новые таски...')
-        new_data = {
+        print(self.__timestamp(), strftime("%H:%M:%S", localtime(self.__timestamp())),
+              ' - Проверяю обновления начиная с', self.__last_time)
+
+        data = {
             "api.token": phkey,
             "queryKey": "open",
             "constraints[projects][0]": board,
-            "constraints[createdStart]": self.__last_time
         }
 
-        print(strftime("%H:%M:%S", localtime(self.__timestamp())) + ' - Проверяю обновленные таски...')
-        upd_data = {
-            "api.token": phkey,
-            "queryKey": "open",
-            "constraints[projects][0]": board,
-            "constraints[modifiedStart]": self.__last_time
-        }
-
-        new_r = requests.post(url, params=new_data, verify=False)
-        upd_r = requests.post(url, params=upd_data, verify=False)
+        data.update({"constraints[createdStart]": self.__last_time})
+        new_r = requests.post(url, params=data, verify=False)
+        data.pop("constraints[createdStart]")
+        data.update({"constraints[modifiedStart]": self.__last_time})
+        upd_r = requests.post(url, params=data, verify=False)
 
         new_parsed = self.__parse_results(new_r.json(), "new")
         upd_parsed = self.__parse_results(upd_r.json(), "upd")
@@ -289,14 +326,16 @@ class GetTasks:
         else:
             print('Обновленных тасков нет')
 
-        self.__last_time = self.__timestamp()
+        self.__last_time = str(self.__timestamp() - 5)
 
-        config[5].text = str(self.__last_time + 10)
+        print("Проверка закончена ", self.__last_time)
+        config[5].text = self.__last_time
         xml_file.write('config.xml')
 
     @staticmethod
     def do_schedule():
         task_getter = GetTasks()
+        GetTasks().tasks_search(chatid)
         schedule.every(2).minutes.do(task_getter.tasks_search, chat_id=chatid)
 
         global stop_threads
