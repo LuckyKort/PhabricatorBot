@@ -312,6 +312,17 @@ class GetTasks:
         new_parsed = self.__parse_results(new_r.json(), "new")
         upd_parsed = self.__parse_results(upd_r.json(), "upd")
 
+        log_item = "\n------" \
+                   "\nFrom: {0}" \
+                   "\nTo: {1}" \
+                   "\nNew: {2}" \
+                   "\nUpd: {3}" \
+                   "\nNewParsed: {4}" \
+                   "\nUpdParsed: {5}".format(self.__last_time, self.__timestamp(), new_r.json(), upd_r.json(),
+                                             new_parsed, upd_parsed)
+        with open('logs.txt', 'a') as file:
+            file.write(log_item)
+
         if new_parsed is not None:
             self.__send_results(new_parsed, chat_id, "new")
         else:
@@ -321,6 +332,9 @@ class GetTasks:
             updated_tasks = self.__getupdates(upd_parsed, self.__last_time)
             if updated_tasks is not None:
                 self.__send_results(updated_tasks, chat_id, "upd")
+                updated_tasks_logline = "\nUpdated_tasks: {0}".format(updated_tasks)
+                with open('logs.txt', 'a') as file:
+                    file.write(updated_tasks_logline)
             else:
                 print('Обновленных тасков нет')
         else:
