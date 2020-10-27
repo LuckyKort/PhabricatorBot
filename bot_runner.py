@@ -169,6 +169,7 @@ class GetTasks:
         try:
             if len(ids) > 0:
                 upd_summary = {}
+                curr_num = 0
                 for i in ids:
                     url = '{0}/api/maniphest.gettasktransactions'.format(server)
                     data = {
@@ -178,7 +179,6 @@ class GetTasks:
                     r = requests.post(url, params=data, verify=False)
                     task = r.json()
                     curr_id = str(ids[i])
-                    curr_num = 0
                     for j in range(len(task['result'][curr_id])):
                         if task['result'][curr_id][j]['dateCreated'] > task_time:
                             if task['result'][curr_id][j]['transactionType'] == "reassign":
@@ -191,7 +191,7 @@ class GetTasks:
                                                          "task_id": task_id,
                                                          "oldowner": oldowner,
                                                          "newowner": newowner}
-                                curr_num += curr_num
+                                curr_num += 1
 
                             if task['result'][curr_id][j]['transactionType'] == "core:columns":
                                 if task['result'][curr_id][j]['newValue'][0]['boardPHID'] != ignoredphid:
@@ -204,7 +204,7 @@ class GetTasks:
                                                              "task_id": task_id,
                                                              "column": column['column'],
                                                              "project": column['project']}
-                                    curr_num += curr_num
+                                    curr_num += 1
 
                             if task['result'][curr_id][j]['transactionType'] == "priority":
                                 task_id = task['result'][curr_id][j]['taskID']
@@ -216,7 +216,7 @@ class GetTasks:
                                                          "task_id": task_id,
                                                          "old_prior": old_prior,
                                                          "new_prior": new_prior}
-                                curr_num += curr_num
+                                curr_num += 1
 
                 if len(upd_summary) > 0:
                     return upd_summary
