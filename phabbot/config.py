@@ -1,0 +1,84 @@
+import json
+import os.path
+
+
+class Config(dict):
+    __default_path = "./config.json"
+
+    def __init__(self, path=None, **kwargs):
+        self.path = path and path or Config.__default_path
+        super().__init__(self, **kwargs)
+
+    @staticmethod
+    def load(path: str or None = None):
+        if not path:
+            path = Config.__default_path
+
+        if not os.path.isfile(path):
+            return Config()
+
+        with open(path, 'r') as config:
+            return Config(**json.load(config), path=path)
+
+    def chat(self, chat_id, update=True):
+        chats = self.get('chats', [])
+        for chat in chats:
+            if chat_id == chat.get('chat_id'):
+                return chat
+        chat = {'chat_id': chat_id}
+        chats.append(chat)
+        update and self.dump()
+        return chat
+
+    def active(self, chat_id):
+        chat = self.chat(chat_id, False)
+        return bool(chat.get('active'))
+
+    def server(self, chat_id):
+        chat = self.chat(chat_id, False)
+        return chat.get('server')
+
+    def set_server(self, chat_id, server):
+        chat = self.chat(chat_id, False)
+        chat['server'] = server
+        self.dump()
+
+    def phab_api(self, chat_id):
+        chat = self.chat(chat_id, False)
+        return chat.get('phab_api')
+
+    def set_phab_api(self, chat_id, phab_api):
+        chat = self.chat(chat_id, False)
+        chat['phab_api'] = phab_api
+        self.dump()
+
+    def frequency(self, chat_id):
+        chat = self.chat(chat_id, False)
+        return chat.get('frequency')
+
+    def set_frequency(self, chat_id, frequency):
+        chat = self.chat(chat_id, False)
+        chat['frequency'] = frequency
+        self.dump()
+
+    def board_name(self, chat_id):
+        chat = self.chat(chat_id, False)
+        return chat.get('board_name')
+
+    def set_board_name(self, chat_id, board_name):
+        chat = self.chat(chat_id, False)
+        chat['board_name'] = board_name
+        self.dump()
+
+    def ignored_boards(self, chat_id):
+        chat = self.chat(chat_id, False)
+        return chat.get('ignored_boards')
+
+    def set_ignored_boards(self, chat_id, ignored_boards):
+        chat = self.chat(chat_id, False)
+        chat['ignored_boards'] = ignored_boards
+        self.dump()
+
+    def dump(self):
+        with open(self.path, 'w') as config:
+            json.dump(self, config, indent=4)
