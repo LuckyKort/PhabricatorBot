@@ -135,3 +135,4 @@ dmypy.json
 .idea/
 /logs.txt
 /logs_old.txt
+config.json
