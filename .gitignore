@@ -133,3 +133,4 @@ dmypy.json
 /timestamp.txt
 /.DS_Store
 .idea/
+/logs.txt

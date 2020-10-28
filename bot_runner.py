@@ -43,7 +43,7 @@ class GetTasks:
         try:
             now_utc = datetime.now(timezone('UTC'))
             now_local = now_utc.astimezone(get_localzone())
-            ts = int(datetime.timestamp(now_local)) - 10
+            ts = int(datetime.timestamp(now_local)) - 5
             return ts
         except Exception as e:
             print("Произошла ошибка при получении времени: ", e)
@@ -64,7 +64,7 @@ class GetTasks:
                 realname = json_dict['result']['data'][0]['fields']['realName']
                 return {'username': username, 'realname': realname}
             else:
-                return {'username': "Не определен", 'realname': "Не определен"}
+                return {'username': "Не установлен", 'realname': "Не установлен"}
         except Exception as e:
             print('При получении имени пользователя произошла ошибка: ', e)
             return None
@@ -100,13 +100,39 @@ class GetTasks:
                 col_r = requests.post(url, params=data, verify=False)
                 json_dict = col_r.json()
                 col = json_dict['result']['data'][0]['fields']['name']
-                project = json_dict['result']['data'][0]['fields']['project']['name']
+                project_phid = json_dict['result']['data'][0]['fields']['project']['phid']
+                phboard = GetTasks.__getproject(project_phid)['board']
+                phproject = GetTasks.__getproject(project_phid)['project']
 
-                return {'column': col, 'project': project}
+                return {'column': col, 'board': phboard, 'project': phproject}
             else:
                 return "Неизвестен"
         except Exception as e:
             print('При получении имени колонки произошла ошибка: ', e)
+            return None
+
+    @staticmethod
+    def __getproject(phid):
+        try:
+            if phid is not None:
+                url = '{0}/api/project.search'.format(server)
+                data = {
+                    "api.token": phkey,
+                    "constraints[phids][0]": phid,
+                }
+                proj_r = requests.post(url, params=data, verify=False)
+                json_dict = proj_r.json()
+                phboard = json_dict['result']['data'][0]['fields']['name']
+                if int(json_dict['result']['data'][0]['fields']['milestone']) == 2:
+                    phproject = json_dict['result']['data'][0]['fields']['parent']['name']
+                else:
+                    phproject = None
+
+                return {'board': phboard, 'project': phproject}
+            else:
+                return "Неизвестен"
+        except Exception as e:
+            print('При получении имени проекта произошла ошибка: ', e)
             return None
 
     @staticmethod
@@ -134,7 +160,7 @@ class GetTasks:
                     for i in range(len(json_dict['result']['data'])):
                         task_id = json_dict['result']['data'][i]['id']
                         task_name = json_dict['result']['data'][i]['fields']['name']
-                        prior = json_dict['result']['data'][i]['fields']['priority']['value']
+                        prior = int(json_dict['result']['data'][i]['fields']['priority']['value'])
                         task_prior = GetTasks.__getpriority(prior)[1]
                         owner = json_dict['result']['data'][i]['fields']['ownerPHID']
                         author = json_dict['result']['data'][i]['fields']['authorPHID']
@@ -203,13 +229,14 @@ class GetTasks:
                                                              "name": name,
                                                              "task_id": task_id,
                                                              "column": column['column'],
+                                                             "board": column['board'],
                                                              "project": column['project']}
                                     curr_num += 1
 
                             if task['result'][curr_id][j]['transactionType'] == "priority":
                                 task_id = task['result'][curr_id][j]['taskID']
-                                old_prior = GetTasks.__getpriority(task['result'][curr_id][j]['oldValue'])[2]
-                                new_prior = GetTasks.__getpriority(task['result'][curr_id][j]['newValue'])[0]
+                                old_prior = GetTasks.__getpriority(int(task['result'][curr_id][j]['oldValue']))[2]
+                                new_prior = GetTasks.__getpriority(int(task['result'][curr_id][j]['newValue']))[0]
                                 name = GetTasks.__gettaskname(task['result'][curr_id][j]['taskID'])
                                 upd_summary[curr_num] = {"action": "priority",
                                                          "name": name,
@@ -249,44 +276,89 @@ class GetTasks:
                 new_ids.append(int(result['task_id']))
 
         elif act == "upd":
-            updated_tasks = [res for res in results.values() if int(res['task_id']) not in new_ids]
-            if len(updated_tasks) == 0:
+            result_list = [res for res in results.values() if int(res['task_id']) not in new_ids]
+            if len(result_list) == 0:
                 print('Обновленных тасков нет')
 
-            for result in updated_tasks:
+            res_dict = {}
+            for result in result_list:
+                if res_dict.get(result['task_id']):
+                    res_dict[result['task_id']] += 1
+                else:
+                    res_dict[result['task_id']] = 1
+
+            result_messages = {}
+
+            for result in result_list:
                 print('Обнаружен обновленный таск!')
+
+                if res_dict[result['task_id']] > 1:
+                    if result_messages.get(result['task_id']) is None:
+                        result_messages[result['task_id']] = {}
+                        result_messages[result['task_id']].update({'name': result['name']})
+                        result_messages[result['task_id']].update({'id': result['task_id']})
+                        result_messages[result['task_id']]['message'] = []
+
+                footerstr = '\n\U0001F449 <a href ="{0}/T{1}">Открыть таск</a>'.format(server,
+                                                                                     result['task_id'])
+
                 if result['action'] == "reassign":
-                    resultstr = 'В таске \U0001F4CA <b>"{0}"</b> был изменен исполнитель: \n' \
-                                '\U0001F425 Предыдущий исполнитель: <b>{1}</b>\n' \
-                                '\U0001F425 Новый исполнитель: <b>{2}</b>\n' \
-                                '\U0001F449 <a href ="{3}/T{4}">Открыть таск</a>'.format(result['name'],
-                                                                                         result['oldowner'],
-                                                                                         result['newowner'],
-                                                                                         server,
-                                                                                         result['task_id']
-                                                                                         )
-                    bot.send_message(chat_id, resultstr, parse_mode='HTML')
+                    headstr = 'В таске \U0001F4CA <b>"{0}"</b>'.format(result['name'])
+                    resultstr = 'был изменен исполнитель: \n' \
+                                '\U0001F425 Предыдущий исполнитель: <b>{0}</b>\n' \
+                                '\U0001F425 Новый исполнитель: <b>{1}</b>\n'.format(result['oldowner'],
+                                                                                    result['newowner'],
+                                                                                    )
+                    if res_dict[result['task_id']] > 1:
+                        result_messages[result['task_id']]['message'].append(
+                            "\n\U0001F4DD " + resultstr[0].upper() + resultstr[1:]
+                        )
+                    else:
+                        bot.send_message(chat_id, headstr + resultstr + footerstr, parse_mode='HTML')
 
                 if result['action'] == "move":
-                    resultstr = 'Таск \U0001F4CA <b>"{0}"</b> перемещен в колонку <b>"{1}"</b> на борде "{2}"\n' \
-                                '\U0001F449 <a href ="{3}/T{4}">Открыть таск</a>'.format(result['name'],
-                                                                                         result['column'],
-                                                                                         result['project'],
-                                                                                         server,
-                                                                                         result['task_id']
-                                                                                         )
-                    bot.send_message(chat_id, resultstr, parse_mode='HTML')
+
+                    projstr = result['project'] is not None and (result['project'] + " - ") or ""
+
+                    headstr = 'Таск \U0001F4CA <b>"{0}"</b> '.format(result['name'])
+                    resultstr = 'перемещен в колонку ' \
+                                '<b>"{0}"</b> на борде <b>"{1}{2}"</b>\n'.format(result['column'],
+                                                                                 projstr,
+                                                                                 result['board'],
+                                                                                 server,
+                                                                                 result['task_id']
+                                                                                 )
+                    if res_dict[result['task_id']] > 1:
+                        result_messages[result['task_id']]['message'].append(
+                            "\n\U0001F4DD " + resultstr[0].upper() + resultstr[1:]
+                        )
+                    else:
+                        bot.send_message(chat_id, headstr + resultstr + footerstr, parse_mode='HTML')
 
                 if result['action'] == "priority":
-                    resultstr = 'В таске \U0001F4CA <b>"{0}"</b> изменен приоритет ' \
-                                'с <b>"{1}"</b> на <b>"{2}"</b>\n' \
-                                '\U0001F449 <a href ="{3}/T{4}">Открыть таск</a>'.format(result['name'],
-                                                                                         result['old_prior'],
-                                                                                         result['new_prior'],
-                                                                                         server,
-                                                                                         result['task_id']
-                                                                                         )
-                    bot.send_message(chat_id, resultstr, parse_mode='HTML')
+                    headstr = 'В таске \U0001F4CA <b>"{0}"</b> '.format(result['name'])
+                    resultstr = 'изменен приоритет ' \
+                                'с <b>"{0}"</b> на <b>"{1}"</b>\n'.format(result['old_prior'],
+                                                                          result['new_prior'],
+                                                                          )
+                    if res_dict[result['task_id']] > 1:
+                        result_messages[result['task_id']]['message'].append(
+                            "\n\U0001F4DD " + resultstr[0].upper() + resultstr[1:]
+                        )
+                    else:
+                        bot.send_message(chat_id, headstr + resultstr + footerstr, parse_mode='HTML')
+
+            for message in result_messages.values():
+                messagestr = ""
+                for actions in message['message']:
+                    messagestr += actions
+                resultstr = 'В таске \U0001F4CA <b>"{0}"</b> произошли изменения:\n ' \
+                            '{1} \n' \
+                            '\U0001F449 <a href ="{2}/T{3}">Открыть таск</a>'.format(message['name'],
+                                                                                     messagestr,
+                                                                                     server,
+                                                                                     message['id'])
+                bot.send_message(chat_id, resultstr, parse_mode='HTML')
 
     def tasks_search(self, chat_id):
         if not self.__last_time:
@@ -294,8 +366,8 @@ class GetTasks:
 
         url = '{0}/api/maniphest.search'.format(server)
 
-        print(self.__timestamp(), strftime("%H:%M:%S", localtime(self.__timestamp())),
-              ' - Проверяю обновления начиная с', self.__last_time)
+        print(strftime("%H:%M:%S", localtime(self.__timestamp())),
+              '- Проверяю обновления в промежутке с ', self.__last_time, ' до ', self.__timestamp())
 
         data = {
             "api.token": phkey,
@@ -340,9 +412,9 @@ class GetTasks:
         else:
             print('Обновленных тасков нет')
 
-        self.__last_time = str(self.__timestamp() - 5)
+        self.__last_time = str(self.__timestamp())
 
-        print("Проверка закончена ", self.__last_time)
+        print("Проверка закончена, записанный timestamp:", self.__last_time)
         config[5].text = self.__last_time
         xml_file.write('config.xml')
 
