@@ -2,6 +2,7 @@ import requests
 import time
 import telebot
 import schedule
+import os
 from time import strftime, localtime
 from threading import Thread
 from datetime import datetime
@@ -9,6 +10,7 @@ from pytz import timezone
 from tzlocal import get_localzone
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from lxml import etree
+from shutil import copyfile
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
@@ -31,6 +33,16 @@ new_ids = []
 @bot.message_handler(commands=['getchatid'])
 def setup(message):
     bot.send_message(message.chat.id, 'ID чата: ' + str(message.chat.id))
+
+
+def copy_logs():
+    if os.path.isfile("logs_old.txt"):
+        os.remove("logs_old.txt")
+    copyfile("logs.txt", "logs_old.txt")
+    if os.path.isfile("logs.txt"):
+        os.remove("logs.txt")
+    open("logs.txt", 'a').close()
+    return
 
 
 class GetTasks:
@@ -101,8 +113,8 @@ class GetTasks:
                 json_dict = col_r.json()
                 col = json_dict['result']['data'][0]['fields']['name']
                 project_phid = json_dict['result']['data'][0]['fields']['project']['phid']
-                phboard = GetTasks.__getproject(project_phid)['board']
-                phproject = GetTasks.__getproject(project_phid)['project']
+                phboard = GetTasks.__getproject(project_phid, "phid")['board']
+                phproject = GetTasks.__getproject(project_phid, "phid")['project']
 
                 return {'column': col, 'board': phboard, 'project': phproject}
             else:
@@ -112,23 +124,33 @@ class GetTasks:
             return None
 
     @staticmethod
-    def __getproject(phid):
+    def __getproject(board_id, act):
         try:
-            if phid is not None:
-                url = '{0}/api/project.search'.format(server)
-                data = {
-                    "api.token": phkey,
-                    "constraints[phids][0]": phid,
-                }
+            if board_id is not None:
+                if act == "phid":
+                    url = '{0}/api/project.search'.format(server)
+                    data = {
+                        "api.token": phkey,
+                        "constraints[phids][0]": board_id,
+                    }
+
+                else:
+                    url = '{0}/api/project.search'.format(server)
+                    data = {
+                        "api.token": phkey,
+                        "constraints[name]": board_id,
+                    }
+
                 proj_r = requests.post(url, params=data, verify=False)
                 json_dict = proj_r.json()
                 phboard = json_dict['result']['data'][0]['fields']['name']
-                if int(json_dict['result']['data'][0]['fields']['milestone']) == 2:
-                    phproject = json_dict['result']['data'][0]['fields']['parent']['name']
-                else:
-                    phproject = None
+                phproject = None
+                if json_dict['result']['data'][0]['fields']['milestone'] is not None:
+                    if int(json_dict['result']['data'][0]['fields']['milestone']) == 2:
+                        phproject = json_dict['result']['data'][0]['fields']['parent']['name']
 
                 return {'board': phboard, 'project': phproject}
+
             else:
                 return "Неизвестен"
         except Exception as e:
@@ -158,6 +180,9 @@ class GetTasks:
                 new_tasks = {}
                 if len(json_dict['result']['data']) > 0:
                     for i in range(len(json_dict['result']['data'])):
+                        global board
+                        board = GetTasks.__getproject(board, "id")['board']
+                        project = GetTasks.__getproject(board, "id")['project']
                         task_id = json_dict['result']['data'][i]['id']
                         task_name = json_dict['result']['data'][i]['fields']['name']
                         prior = int(json_dict['result']['data'][i]['fields']['priority']['value'])
@@ -167,6 +192,8 @@ class GetTasks:
                         task_owner = GetTasks.__whois(owner)['realname']
                         task_author = GetTasks.__whois(author)['realname']
                         task_summary = {"task_id": task_id,
+                                        "board": board,
+                                        "project": project,
                                         "name": task_name,
                                         "priority": task_prior,
                                         "owner": task_owner,
@@ -235,14 +262,30 @@ class GetTasks:
 
                             if task['result'][curr_id][j]['transactionType'] == "priority":
                                 task_id = task['result'][curr_id][j]['taskID']
-                                old_prior = GetTasks.__getpriority(int(task['result'][curr_id][j]['oldValue']))[2]
-                                new_prior = GetTasks.__getpriority(int(task['result'][curr_id][j]['newValue']))[0]
+                                old_value = int(task['result'][curr_id][j]['oldValue'])
+                                new_value = int(task['result'][curr_id][j]['newValue'])
+                                old_prior = GetTasks.__getpriority(old_value)[2]
+                                new_prior = GetTasks.__getpriority(new_value)[2]
                                 name = GetTasks.__gettaskname(task['result'][curr_id][j]['taskID'])
+                                subject = "повышен" if old_value < new_value else "понижен"
                                 upd_summary[curr_num] = {"action": "priority",
                                                          "name": name,
                                                          "task_id": task_id,
+                                                         "subject": subject,
                                                          "old_prior": old_prior,
                                                          "new_prior": new_prior}
+                                curr_num += 1
+
+                            if task['result'][curr_id][j]['transactionType'] == "core:comment":
+                                task_id = task['result'][curr_id][j]['taskID']
+                                name = GetTasks.__gettaskname(task['result'][curr_id][j]['taskID'])
+                                comment = task['result'][curr_id][j]['comments']
+                                author = GetTasks.__whois(task['result'][curr_id][j]['authorPHID'])['realname']
+                                upd_summary[curr_num] = {"action": "comment",
+                                                         "name": name,
+                                                         "task_id": task_id,
+                                                         "comment": comment,
+                                                         "author": author}
                                 curr_num += 1
 
                 if len(upd_summary) > 0:
@@ -262,10 +305,12 @@ class GetTasks:
         if act == "new":
             for result in results.values():
                 print('Обнаружен новый таск!')
-                resultstr = 'На борде появился новый таск с <b>{0}</b> приоритетом: \n \U0001F4CA <b>"{1}"</b> \n' \
-                            '\U0001F425 Инициатор: <b>{2}</b>\n' \
-                            '\U0001F425 Исполнитель: <b>{3}</b>\n' \
-                            '\U0001F449 <a href ="{4}/T{5}">Открыть таск</a>'.format(result['priority'],
+                resultstr = 'На борде <b>{0}</b> появился новый таск ' \
+                            'с <b>{1}</b> приоритетом: \n \U0001F4CA <b>"{2}"</b> \n' \
+                            '\U0001F425 Инициатор: <b>{3}</b>\n' \
+                            '\U0001F425 Исполнитель: <b>{4}</b>\n' \
+                            '\U0001F449 <a href ="{5}/T{6}">Открыть таск</a>'.format(result['board'],
+                                                                                     result['priority'],
                                                                                      result['name'],
                                                                                      result['author'],
                                                                                      result['owner'],
@@ -289,7 +334,7 @@ class GetTasks:
 
             result_messages = {}
 
-            for result in result_list:
+            for result in result_list[::-1]:
                 print('Обнаружен обновленный таск!')
 
                 if res_dict[result['task_id']] > 1:
@@ -300,10 +345,10 @@ class GetTasks:
                         result_messages[result['task_id']]['message'] = []
 
                 footerstr = '\n\U0001F449 <a href ="{0}/T{1}">Открыть таск</a>'.format(server,
-                                                                                     result['task_id'])
+                                                                                       result['task_id'])
 
                 if result['action'] == "reassign":
-                    headstr = 'В таске \U0001F4CA <b>"{0}"</b>'.format(result['name'])
+                    headstr = 'В таске \U0001F4CA <b>"{0}"</b> '.format(result['name'])
                     resultstr = 'был изменен исполнитель: \n' \
                                 '\U0001F425 Предыдущий исполнитель: <b>{0}</b>\n' \
                                 '\U0001F425 Новый исполнитель: <b>{1}</b>\n'.format(result['oldowner'],
@@ -322,7 +367,7 @@ class GetTasks:
 
                     headstr = 'Таск \U0001F4CA <b>"{0}"</b> '.format(result['name'])
                     resultstr = 'перемещен в колонку ' \
-                                '<b>"{0}"</b> на борде <b>"{1}{2}"</b>\n'.format(result['column'],
+                                '<b>{0}</b> на борде <b>{1}{2}</b>\n'.format(result['column'],
                                                                                  projstr,
                                                                                  result['board'],
                                                                                  server,
@@ -337,16 +382,24 @@ class GetTasks:
 
                 if result['action'] == "priority":
                     headstr = 'В таске \U0001F4CA <b>"{0}"</b> '.format(result['name'])
-                    resultstr = 'изменен приоритет ' \
-                                'с <b>"{0}"</b> на <b>"{1}"</b>\n'.format(result['old_prior'],
-                                                                          result['new_prior'],
-                                                                          )
+                    resultstr = '{0} приоритет ' \
+                                'с <b>{1}</b> до <b>{2}</b>\n'.format(result['subject'],
+                                                                      result['old_prior'],
+                                                                      result['new_prior'],
+                                                                      )
                     if res_dict[result['task_id']] > 1:
                         result_messages[result['task_id']]['message'].append(
                             "\n\U0001F4DD " + resultstr[0].upper() + resultstr[1:]
                         )
                     else:
                         bot.send_message(chat_id, headstr + resultstr + footerstr, parse_mode='HTML')
+
+                if result['action'] == "comment":
+                    resultstr = '\n\U0001F4AC {0} добавил(-а) комментарий: \n<b>{1}</b>\n'.format(result['author'],
+                                                                                                    result['comment']
+                                                                                                    )
+                    if res_dict[result['task_id']] > 1:
+                        result_messages[result['task_id']]['message'].append(resultstr)
 
             for message in result_messages.values():
                 messagestr = ""
@@ -422,6 +475,7 @@ class GetTasks:
     def do_schedule():
         task_getter = GetTasks()
         GetTasks().tasks_search(chatid)
+        schedule.every().day.at("05:00").do(copy_logs)
         schedule.every(2).minutes.do(task_getter.tasks_search, chat_id=chatid)
 
         global stop_threads
