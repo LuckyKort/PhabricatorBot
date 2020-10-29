@@ -134,3 +134,4 @@ dmypy.json
 /.DS_Store
 .idea/
 /logs.txt
+/logs_old.txt
