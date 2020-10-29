@@ -271,6 +271,19 @@ class GetTasks:
                                                          "new_prior": new_prior}
                                 curr_num += 1
 
+                            if task['result'][curr_id][j]['transactionType'] == "core:comment":
+                                task_id = task['result'][curr_id][j]['taskID']
+                                name = GetTasks.__gettaskname(task['result'][curr_id][j]['taskID'])
+                                comment = task['result'][curr_id][j]['comments']
+                                author = GetTasks.__whois(task['result'][curr_id][j]['authorPHID'])['realname']
+                                upd_summary[curr_num] = {"action": "comment",
+                                                         "name": name,
+                                                         "task_id": task_id,
+                                                         "comment": comment[0:100] + '...' if
+                                                         (len(comment) > 100) else comment,
+                                                         "author": author}
+                                curr_num += 1
+
                 if len(upd_summary) > 0:
                     return upd_summary
                 else:
@@ -375,6 +388,13 @@ class GetTasks:
                         )
                     else:
                         bot.send_message(chat_id, headstr + resultstr + footerstr, parse_mode='HTML')
+
+                if result['action'] == "comment":
+                    resultstr = '\n\U0001F4AC {0} добавил(-а) комментарий: \n<b>{1}</b>\n'.format(result['author'],
+                                                                                                    result['comment']
+                                                                                                    )
+                    if res_dict[result['task_id']] > 1:
+                        result_messages[result['task_id']]['message'].append(resultstr)
 
             for message in result_messages.values():
                 messagestr = ""
