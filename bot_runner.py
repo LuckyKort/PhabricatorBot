@@ -36,6 +36,11 @@ def setup(message):
     bot.send_message(message.chat.id, 'ID чата: ' + str(message.chat.id))
 
 
+@bot.message_handler(commands=['sendnotification'])
+def setup(message):
+    bot.send_message(chatid, message.text.replace("/sendnotification", ""))
+
+
 def copy_logs():
     if os.path.isfile("logs_old.txt"):
         os.remove("logs_old.txt")
