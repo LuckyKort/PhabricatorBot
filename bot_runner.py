@@ -3,6 +3,7 @@ import time
 import telebot
 import schedule
 import os
+import re
 from time import strftime, localtime
 from threading import Thread
 from datetime import datetime
@@ -279,7 +280,7 @@ class GetTasks:
                             if task['result'][curr_id][j]['transactionType'] == "core:comment":
                                 task_id = task['result'][curr_id][j]['taskID']
                                 name = GetTasks.__gettaskname(task['result'][curr_id][j]['taskID'])
-                                comment = task['result'][curr_id][j]['comments']
+                                comment = re.sub(r'{([\s\S]+?)}', '[Вложение]', task['result'][curr_id][j]['comments'])
                                 author = GetTasks.__whois(task['result'][curr_id][j]['authorPHID'])['realname']
                                 upd_summary[curr_num] = {"action": "comment",
                                                          "name": name,
