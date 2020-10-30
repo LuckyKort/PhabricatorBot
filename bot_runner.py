@@ -284,7 +284,8 @@ class GetTasks:
                                 upd_summary[curr_num] = {"action": "comment",
                                                          "name": name,
                                                          "task_id": task_id,
-                                                         "comment": comment,
+                                                         "comment": comment[0:100] + '..' if
+                                                         (len(comment) > 100) else comment,
                                                          "author": author}
                                 curr_num += 1
 
