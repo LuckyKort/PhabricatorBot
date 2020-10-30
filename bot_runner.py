@@ -193,6 +193,7 @@ class GetTasks:
                         task_author = GetTasks.__whois(author)['realname']
                         task_summary = {"task_id": task_id,
                                         "board": board,
+                                        "project": project,
                                         "name": task_name,
                                         "priority": task_prior,
                                         "owner": task_owner,
@@ -261,12 +262,16 @@ class GetTasks:
 
                             if task['result'][curr_id][j]['transactionType'] == "priority":
                                 task_id = task['result'][curr_id][j]['taskID']
-                                old_prior = GetTasks.__getpriority(int(task['result'][curr_id][j]['oldValue']))[2]
-                                new_prior = GetTasks.__getpriority(int(task['result'][curr_id][j]['newValue']))[0]
+                                old_value = int(task['result'][curr_id][j]['oldValue'])
+                                new_value = int(task['result'][curr_id][j]['newValue'])
+                                old_prior = GetTasks.__getpriority(old_value)[2]
+                                new_prior = GetTasks.__getpriority(new_value)[2]
                                 name = GetTasks.__gettaskname(task['result'][curr_id][j]['taskID'])
+                                subject = "повышен" if old_value < new_value else "понижен"
                                 upd_summary[curr_num] = {"action": "priority",
                                                          "name": name,
                                                          "task_id": task_id,
+                                                         "subject": subject,
                                                          "old_prior": old_prior,
                                                          "new_prior": new_prior}
                                 curr_num += 1
@@ -279,8 +284,7 @@ class GetTasks:
                                 upd_summary[curr_num] = {"action": "comment",
                                                          "name": name,
                                                          "task_id": task_id,
-                                                         "comment": comment[0:100] + '...' if
-                                                         (len(comment) > 100) else comment,
+                                                         "comment": comment,
                                                          "author": author}
                                 curr_num += 1
 
@@ -330,7 +334,7 @@ class GetTasks:
 
             result_messages = {}
 
-            for result in result_list:
+            for result in result_list[::-1]:
                 print('Обнаружен обновленный таск!')
 
                 if res_dict[result['task_id']] > 1:
@@ -363,7 +367,7 @@ class GetTasks:
 
                     headstr = 'Таск \U0001F4CA <b>"{0}"</b> '.format(result['name'])
                     resultstr = 'перемещен в колонку ' \
-                                '<b>"{0}"</b> на борде <b>"{1}{2}"</b>\n'.format(result['column'],
+                                '<b>{0}</b> на борде <b>{1}{2}</b>\n'.format(result['column'],
                                                                                  projstr,
                                                                                  result['board'],
                                                                                  server,
@@ -378,10 +382,11 @@ class GetTasks:
 
                 if result['action'] == "priority":
                     headstr = 'В таске \U0001F4CA <b>"{0}"</b> '.format(result['name'])
-                    resultstr = 'изменен приоритет ' \
-                                'с <b>"{0}"</b> на <b>"{1}"</b>\n'.format(result['old_prior'],
-                                                                          result['new_prior'],
-                                                                          )
+                    resultstr = '{0} приоритет ' \
+                                'с <b>{1}</b> до <b>{2}</b>\n'.format(result['subject'],
+                                                                      result['old_prior'],
+                                                                      result['new_prior'],
+                                                                      )
                     if res_dict[result['task_id']] > 1:
                         result_messages[result['task_id']]['message'].append(
                             "\n\U0001F4DD " + resultstr[0].upper() + resultstr[1:]
