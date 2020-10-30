@@ -349,7 +349,7 @@ class GetTasks:
                                                                                        result['task_id'])
 
                 if result['action'] == "reassign":
-                    headstr = 'В таске \U0001F4CA <b>"{0}"</b> '.format(result['name'])
+                    headstr = '\U0001F4CA В таске <b>{0}</b> '.format(result['name'])
                     resultstr = 'был изменен исполнитель: \n' \
                                 '\U0001F425 Предыдущий исполнитель: <b>{0}</b>\n' \
                                 '\U0001F425 Новый исполнитель: <b>{1}</b>\n'.format(result['oldowner'],
@@ -366,7 +366,7 @@ class GetTasks:
 
                     projstr = result['project'] is not None and (result['project'] + " - ") or ""
 
-                    headstr = 'Таск \U0001F4CA <b>"{0}"</b> '.format(result['name'])
+                    headstr = '\U0001F4CA Таск <b>{0}</b> '.format(result['name'])
                     resultstr = 'перемещен в колонку ' \
                                 '<b>{0}</b> на борде <b>{1}{2}</b>\n'.format(result['column'],
                                                                                  projstr,
@@ -382,7 +382,7 @@ class GetTasks:
                         bot.send_message(chat_id, headstr + resultstr + footerstr, parse_mode='HTML')
 
                 if result['action'] == "priority":
-                    headstr = 'В таске \U0001F4CA <b>"{0}"</b> '.format(result['name'])
+                    headstr = '\U0001F4CA В таске <b>{0}</b> '.format(result['name'])
                     resultstr = '{0} приоритет ' \
                                 'с <b>{1}</b> до <b>{2}</b>\n'.format(result['subject'],
                                                                       result['old_prior'],
@@ -406,7 +406,7 @@ class GetTasks:
                 messagestr = ""
                 for actions in message['message']:
                     messagestr += actions
-                resultstr = 'В таске \U0001F4CA <b>"{0}"</b> произошли изменения:\n ' \
+                resultstr = '\U0001F4CA В таске <b>{0}</b> произошли изменения:\n ' \
                             '{1} \n' \
                             '\U0001F449 <a href ="{2}/T{3}">Открыть таск</a>'.format(message['name'],
                                                                                      messagestr,
