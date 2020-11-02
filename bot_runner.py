@@ -36,15 +36,19 @@ def setup(message):
     bot.send_message(message.chat.id, 'ID чата: ' + str(message.chat.id))
 
 
-@bot.message_handler(commands=['sendnotification'])
+@bot.message_handler(commands=['send'])
 def setup(message):
-    bot.send_message(chatid, message.text.replace("/sendnotification", ""))
+    bot.send_message(chatid, message.text.replace("/send", ""))
 
 
 def copy_logs():
     if os.path.isfile("logs_old.txt"):
         os.remove("logs_old.txt")
     copyfile("logs.txt", "logs_old.txt")
+    if os.name == 'posix':
+        _ = os.system('clear')
+    else:
+        _ = os.system('cls')
     if os.path.isfile("logs.txt"):
         os.remove("logs.txt")
     open("logs.txt", 'a').close()
@@ -313,17 +317,17 @@ class GetTasks:
             for result in results.values():
                 print('Обнаружен новый таск!')
                 resultstr = 'На борде <b>{0}</b> появился новый таск ' \
-                            'с <b>{1}</b> приоритетом: \n \U0001F4CA <b>"{2}"</b> \n' \
+                            'с <b>{1}</b> приоритетом: \n \U0001F4CA <b>{2}</b> \n' \
                             '\U0001F425 Инициатор: <b>{3}</b>\n' \
                             '\U0001F425 Исполнитель: <b>{4}</b>\n' \
-                            '\U0001F449 <a href ="{5}/T{6}">Открыть таск</a>'.format(result['board'],
-                                                                                     result['priority'],
-                                                                                     result['name'],
-                                                                                     result['author'],
-                                                                                     result['owner'],
-                                                                                     server,
-                                                                                     result['task_id']
-                                                                                     )
+                            '\n\U0001F449 <a href ="{5}/T{6}">Открыть таск</a>'.format(result['board'],
+                                                                                       result['priority'],
+                                                                                       result['name'],
+                                                                                       result['author'],
+                                                                                       result['owner'],
+                                                                                       server,
+                                                                                       result['task_id']
+                                                                                       )
                 bot.send_message(chat_id, resultstr, parse_mode='HTML')
                 new_ids.append(int(result['task_id']))
 
