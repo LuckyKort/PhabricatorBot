@@ -1,19 +1,16 @@
 # PhabricatorBot
 Phabricator notifications telegram bot
 
-Requires pyTelegramBotAPI module installed
+## Requirements
+- pyTelegramBotAPI
+- requests>=2.7.0
+- schedule
 
-Uses config file config.xml with structure:
-
+## Before use
+Add config.json file into the source folder. Minimal structure for config.json: 
 ```
-<?xml version="1.0" encoding="windows-1251"?>
-<keys>
-   <tgapi> telegram api key </tgapi>
-   <phapi> phabricator api key </phapi>
-   <chatid> telegram chat id </chatid>
-   <server> phabricator link </server>
-   <board> phabricator board name </board>
-   <last_time> key to store last check time </last_time>
-   <move_ignore> PHIDs of board to be ignored when checking movement between columns </move_ignore>
-</keys>
+{
+    "tg_api": "TELEGRAM_API_TOKEN",
+    "chats": []
+}
 ```
