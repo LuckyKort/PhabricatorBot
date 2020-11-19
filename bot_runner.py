@@ -46,7 +46,7 @@ def start(message):
                      '\n/ignored_boards Ид1 Ид2 ... - задать список идентификаторов бордов, '
                      '\nобновления в которых стоит игнорировать'
                      '\nДиагностика:'
-                     '\n/last_check - время последней проверки')
+                     '\n/last_check - штампы времени последней проверки')
 
 
 @bot.message_handler(commands=['schedule'])
@@ -129,6 +129,14 @@ def ignored_boards(message):
         config.set_ignored_boards(message.chat.id, args)
     bot.send_message(message.chat.id,
                      "Идентификаторы игнорируемых бордов: %s" % config.ignored_boards(message.chat.id))
+
+@bot.message_handler(commands=['last_check'])
+def unschedule(message):
+    bot.send_message(message.chat.id,
+                     "Время последней проверки на наличие новых тасков: %s\n"
+                     "Время последней проверки на наличие обновленных тасков: %s"% (
+                        config.last_new_check(message.chat.id), 
+                        config.last_update_check(message.chat.id))
 
 
 if __name__ == '__main__':
