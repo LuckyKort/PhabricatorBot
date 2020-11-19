@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='PhabricatorBot',
-    version='2.0',
+    version='3.0',
     packages=['phabbot'],
     url='https://github.com/LuckyKort/PhabricatorBot',
     license='',
@@ -11,12 +11,9 @@ setup(
     description='Phabricator notifications telegram bot',
     install_requires=[
         'requests>=2.7.0',
+        'os',
         'pyTelegramBotAPI',
         'schedule',
-        'pytz',
-        'tzlocal',
-        'lxml',
-        'json',
-        'os'
+        'json'
     ]
 )

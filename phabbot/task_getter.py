@@ -1,4 +1,5 @@
 from datetime import datetime
+from email import utils
 from threading import Thread
 from time import strftime, localtime
 import re
@@ -18,6 +19,8 @@ class TaskGetter:
 
     def __init__(self, config: dict):
         self.__chat_config = config
+        # TODO: Сейчас запоминание идентификаторов новых заданий выглядит как костыль
+        self.__new_ids = []
         return
 
     @property
@@ -39,13 +42,22 @@ class TaskGetter:
         self.__chat_config['chat_id'] = value
 
     @property
-    def last_check(self) -> int:
-        return self.__chat_config.get('last_check')
+    def last_new_check(self) -> int:
+        return self.__chat_config.get('last_new_check')
 
-    @last_check.setter
-    def last_check(self, value: int):
+    @last_new_check.setter
+    def last_new_check(self, value: int):
         assert value is not None
-        self.__chat_config['last_check'] = value
+        self.__chat_config['last_new_check'] = value
+
+    @property
+    def last_update_check(self) -> int:
+        return self.__chat_config.get('last_update_check')
+
+    @last_update_check.setter
+    def last_update_check(self, value: int):
+        assert value is not None
+        self.__chat_config['last_update_check'] = value
 
     @property
     def phab_api(self) -> str:
@@ -92,11 +104,13 @@ class TaskGetter:
     @staticmethod
     def __timestamp():
         try:
-            now_local = datetime.now().astimezone()
-            ts = int(datetime.timestamp(now_local)) - 5
-            return ts
+            return int(datetime.now().astimezone().timestamp())
         except Exception as e:
             return print("Произошла ошибка при получении времени: ", e)
+
+    @staticmethod
+    def __serverdate_to_timestamp(date_str: str):
+        return int(utils.parsedate_to_datetime(date_str).astimezone().timestamp())
 
     def __whois(self, phid):
         try:
@@ -207,9 +221,8 @@ class TaskGetter:
                 new_tasks = {}
                 if len(json_dict['result']['data']) > 0:
                     for i in range(len(json_dict['result']['data'])):
-                        global board
-                        board = self.__getproject(board, "id")['board']
-                        project = self.__getproject(board, "id")['project']
+                        board = self.__getproject(self.board_name, "id")['board']
+                        project = self.__getproject(self.board_name, "id")['project']
                         task_id = json_dict['result']['data'][i]['id']
                         task_name = json_dict['result']['data'][i]['fields']['name']
                         prior = int(json_dict['result']['data'][i]['fields']['priority']['value'])
@@ -326,7 +339,6 @@ class TaskGetter:
             return None
 
     def __send_results(self, results, act):
-        global new_ids
         assert (results and len(results))
         if act == "new":
             for result in results.values():
@@ -344,10 +356,10 @@ class TaskGetter:
                                                                                        result['task_id']
                                                                                        )
                 TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML')
-                new_ids.append(int(result['task_id']))
+                self.__new_ids.append(int(result['task_id']))
 
         elif act == "upd":
-            result_list = [res for res in results.values() if int(res['task_id']) not in new_ids]
+            result_list = [res for res in results.values() if int(res['task_id']) not in self.__new_ids]
             if len(result_list) == 0:
                 print('Обновленных тасков нет')
 
@@ -378,8 +390,7 @@ class TaskGetter:
                     resultstr = 'был изменен исполнитель: \n' \
                                 '\U0001F425 Предыдущий исполнитель: <b>{0}</b>\n' \
                                 '\U0001F425 Новый исполнитель: <b>{1}</b>\n'.format(result['oldowner'],
-                                                                                    result['newowner'],
-                                                                                    )
+                                                                                    result['newowner'])
                     if res_dict[result['task_id']] > 1:
                         result_messages[result['task_id']]['message'].append(
                             "\n\U0001F4DD " + resultstr[0].upper() + resultstr[1:]
@@ -440,13 +451,23 @@ class TaskGetter:
                 TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML')
 
     def tasks_search(self):
-        if not self.last_check:
-            self.last_check = self.__timestamp()
+        def search():
+            return requests.post(url, params=data, verify=False)
+
+        if not self.last_new_check:
+            self.last_new_check = self.__timestamp()
+        if not self.last_update_check:
+            self.last_update_check = self.last_new_check
+
+        # Проверка последних обновленных задач не может быть раньше проверки новых заданий
+        assert self.last_update_check >= self.last_new_check
+        if self.last_update_check < self.last_new_check:
+            self.last_update_check = self.last_new_check
+
+        # TODO: Идет сброс костыльного счетчика идентификаторов
+        self.__new_ids.clear()
 
         url = '{0}/api/maniphest.search'.format(self.server)
-
-        print(strftime("%H:%M:%S", localtime(self.__timestamp())),
-              '- Проверяю обновления в промежутке с ', self.last_check, ' до ', self.__timestamp())
 
         data = {
             "api.token": self.phab_api,
@@ -454,22 +475,27 @@ class TaskGetter:
             "constraints[projects][0]": self.board_name,
         }
 
-        data.update({"constraints[createdStart]": self.last_check})
-        new_r = requests.post(url, params=data, verify=False)
+        data.update({"constraints[createdStart]": self.last_new_check})
+        print(strftime("%H:%M:%S", localtime(self.__timestamp())),
+              '- Проверяю наличие новых тасков начиная с ', self.last_new_check)
+        new_r = search()
         data.pop("constraints[createdStart]")
-        data.update({"constraints[modifiedStart]": self.last_check})
-        upd_r = requests.post(url, params=data, verify=False)
+        data.update({"constraints[modifiedStart]": self.last_update_check})
+
+        print(strftime("%H:%M:%S", localtime(self.__timestamp())),
+              '- Проверяю наличие обновленных тасков начиная с ', self.last_update_check)
+        upd_r = search()
 
         new_parsed = self.__parse_results(new_r.json(), "new")
         upd_parsed = self.__parse_results(upd_r.json(), "upd")
 
         log_item = "\n------" \
-                   "\nFrom: {0}" \
-                   "\nTo: {1}" \
+                   "\nFrom(New): {0}" \
+                   "\nFrom(Updates): {1}" \
                    "\nNew: {2}" \
                    "\nUpd: {3}" \
                    "\nNewParsed: {4}" \
-                   "\nUpdParsed: {5}".format(self.last_check, self.__timestamp(), new_r.json(), upd_r.json(),
+                   "\nUpdParsed: {5}".format(self.last_new_check, self.last_update_check, new_r.json(), upd_r.json(),
                                              new_parsed, upd_parsed)
         with open('logs.txt', 'a') as file:
             file.write(log_item)
@@ -480,7 +506,7 @@ class TaskGetter:
             print('Новых тасков нет')
 
         if upd_parsed is not None:
-            updated_tasks = self.__getupdates(upd_parsed, self.last_check)
+            updated_tasks = self.__getupdates(upd_parsed, self.last_update_check)
             if updated_tasks is not None:
                 self.__send_results(updated_tasks, "upd")
                 updated_tasks_logline = "\nUpdated_tasks: {0}".format(updated_tasks)
@@ -491,10 +517,11 @@ class TaskGetter:
         else:
             print('Обновленных тасков нет')
 
-        self.last_check = self.__timestamp()
+        self.last_new_check = TaskGetter.__serverdate_to_timestamp(new_r.headers['date'])
+        self.last_update_check = TaskGetter.__serverdate_to_timestamp(upd_r.headers['date'])
         TaskGetter.__config.dump()
 
-        print("Проверка закончена, записанный timestamp:", self.last_check)
+        print("Проверка закончена, записанные timestamp:", (self.last_new_check, self.last_update_check))
 
     @staticmethod
     def stop():
@@ -519,6 +546,8 @@ class TaskGetter:
                 return
             task_getter = TaskGetter(config)
             assert task_getter.chat_id is not None
+            task_getter.tasks_search()
+            assert TaskGetter.__active_tasks.get(task_getter.chat_id) is None
             TaskGetter.__active_tasks[task_getter.chat_id] = \
                 schedule.every(task_getter.frequency or 2).minutes.do(task_getter.tasks_search)
 
