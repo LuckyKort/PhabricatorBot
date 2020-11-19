@@ -131,12 +131,12 @@ def ignored_boards(message):
                      "Идентификаторы игнорируемых бордов: %s" % config.ignored_boards(message.chat.id))
 
 @bot.message_handler(commands=['last_check'])
-def unschedule(message):
+def last_check(message):
     bot.send_message(message.chat.id,
                      "Время последней проверки на наличие новых тасков: %s\n"
                      "Время последней проверки на наличие обновленных тасков: %s"% (
                         config.last_new_check(message.chat.id), 
-                        config.last_update_check(message.chat.id))
+                        config.last_update_check(message.chat.id)))
 
 
 if __name__ == '__main__':
