@@ -323,7 +323,7 @@ class TaskGetter:
                                 upd_summary[curr_num] = {"action": "comment",
                                                          "name": name,
                                                          "task_id": task_id,
-                                                         "comment": comment[0:100] + '..' if
+                                                         "comment": comment[0:100] + '...' if
                                                          (len(comment) > 100) else comment,
                                                          "author": author}
                                 curr_num += 1
@@ -477,13 +477,10 @@ class TaskGetter:
 
         data.update({"constraints[createdStart]": self.last_new_check})
         print(strftime("%H:%M:%S", localtime(self.__timestamp())),
-              '- Проверяю наличие новых тасков начиная с ', self.last_new_check)
+              '- Проверяю наличие обновлений начиная с ', self.last_new_check)
         new_r = search()
         data.pop("constraints[createdStart]")
         data.update({"constraints[modifiedStart]": self.last_update_check})
-
-        print(strftime("%H:%M:%S", localtime(self.__timestamp())),
-              '- Проверяю наличие обновленных тасков начиная с ', self.last_update_check)
         upd_r = search()
 
         new_parsed = self.__parse_results(new_r.json(), "new")
