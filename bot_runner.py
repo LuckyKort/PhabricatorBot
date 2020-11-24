@@ -23,14 +23,15 @@ def __extract_args(command_text: str):
 def start(message):
     bot.send_message(message.chat.id,
                      'Привет! Я оповещаю об обновленях задач в фабрикаторе.'
-                     '\nОсновные команды:'
+                     '\n\n<b>Основные команды:</b>'
                      '\n/start - отобразить текущее сообщение'
                      '\n/help - инструкция по применению'
+                     '\n/project_id Название - получить PHID борда для дальнейшей конфигурации'
                      '\n/status - статус мониторинга (true - активен | false - приостановлен)'
                      '\n/schedule - запустить задачу по поиску задач'
                      '\n/unschedule - приостановить поиск задач'
                      '\n/reset - остановить поиск задач и удалить настройки'
-                     '\nПоказать текущие настройки:'
+                     '\n\n<b>Показать текущие настройки:</b>'
                      '\n/settings - отобразить все настройки одним сообщением'
                      '\n/server - отобразить текущий адрес сервера,'
                      '\n/phab_api - отобразить текущий токен'
@@ -38,15 +39,21 @@ def start(message):
                      '\n/board_name - отобразить имя борды, за которой нужно следить'
                      '\n/ignored_boards - отобразить список идентификаторов бордов, '
                      '\nобновления в которых стоит игнорировать'
-                     '\nНастройка:'
+                     '\n/ignored_columns - отобразить список названий колонок, '
+                     '\nобновления в которых стоит игнорировать'
+                     '\n\n<b>Настройка:</b>'
                      '\n/server АдресСервера - задать адрес сервера'
                      '\n/phab_api API-токен - задать API-токен, выданный фабрикатором'
                      '\n/frequency ЦЕЛОЕ - задать частоту обращения к серверу (в минутах)'
                      '\n/board_name ИмяБорды - задать имя борды, за которой нужно следить'
                      '\n/ignored_boards Ид1 Ид2 ... - задать список идентификаторов бордов, '
                      '\nобновления в которых стоит игнорировать'
-                     '\nДиагностика:'
-                     '\n/last_check - штампы времени последней проверки')
+                     '\n/reset_ignored_boards - сбросить список игнорируемых бордов '
+                     '\n/ignored_columns Ид1 Ид2 ... - задать список названий колонок, '
+                     '\nобновления в которых стоит игнорировать'
+                     '\n/reset_ignored_boards - сбросить список игнорируемых колонок '
+                     '\n\n<b>Диагностика:</b>'
+                     '\n/last_check - штампы времени последней проверки', parse_mode='HTML')
 
 
 @bot.message_handler(commands=['schedule'])
@@ -66,7 +73,8 @@ def reset(message):
 
 @bot.message_handler(commands=['status'])
 def status(message):
-    bot.send_message(message.chat.id, "Статус мониторинга: %r" % config.active(message.chat.id))
+    activestr = "Активен" if config.active(message.chat.id) else "Отдыхает"
+    bot.send_message(message.chat.id, "Статус мониторинга: " + activestr)
 
 
 @bot.message_handler(commands=['project_id'])
@@ -84,15 +92,14 @@ def get_project(message):
         if len(result['result']['data']) > 0:
             resultstr = 'Результат поиска:\n'
             for i in range(len(result['result']['data'])):
-                phid = result['result']['data'][i]['phid']
-                depth = result['result']['data'][i]['fields']['depth']
-                pname = (result['result']['data'][i]['fields']['parent']['name']) if depth != 0 else None
-                name = result['result']['data'][i]['fields']['name']
-                active = result['result']['data'][i]['fields']['color']['key']
-                resultname = ((pname + " - ") if int(depth) > 1 else "") + name
-                resultstr += (resultname + ", " + phid + "\n") if active != "disabled" else None
-                #TODO
-            bot.send_message(message.chat.id, resultstr)
+                if result['result']['data'][i]['fields']['color']['key'] != "disabled":
+                    phid = result['result']['data'][i]['phid']
+                    depth = result['result']['data'][i]['fields']['depth']
+                    pname = (result['result']['data'][i]['fields']['parent']['name']) if depth != 0 else None
+                    name = result['result']['data'][i]['fields']['name']
+                    resultname = ((pname + " - ") if int(depth) > 1 else "") + name
+                    resultstr += "* <b>" + resultname + ":</b> " + phid + "\n"
+            bot.send_message(message.chat.id, resultstr, parse_mode='HTML')
         else:
             bot.send_message(message.chat.id, "Проекты с таким именем не найдены")
     else:

@@ -537,7 +537,10 @@ class TaskGetter:
         chat_config['active'] = False
         TaskGetter.__config.dump()
         task = TaskGetter.__active_tasks.get(chat_id)
-        task and schedule.cancel_job(task)
+        if not task:
+            return
+        TaskGetter.__active_tasks.pop(chat_id)
+        schedule.cancel_job(task)
 
     @staticmethod
     def schedule(chat_id: int or None = None):
@@ -546,8 +549,9 @@ class TaskGetter:
                 return
             task_getter = TaskGetter(config)
             assert task_getter.chat_id is not None
+            if TaskGetter.__active_tasks.get(task_getter.chat_id):
+                return
             task_getter.tasks_search()
-            assert TaskGetter.__active_tasks.get(task_getter.chat_id) is None
             TaskGetter.__active_tasks[task_getter.chat_id] = \
                 schedule.every(task_getter.frequency or 2).minutes.do(task_getter.tasks_search)
 
