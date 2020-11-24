@@ -1,7 +1,6 @@
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import requests
 import telebot
-
 from phabbot.config import Config
 from phabbot.task_getter import TaskGetter
 
@@ -148,12 +147,12 @@ def frequency(message):
     bot.send_message(message.chat.id, "Частота опроса сервера (минуты): %d" % config.frequency(message.chat.id))
 
 
-@bot.message_handler(commands=['board_name'])
+@bot.message_handler(commands=['board'])
 def board_name(message):
     args = __extract_args(message.text)
     if args:
         config.set_board_name(message.chat.id, args[0])
-    bot.send_message(message.chat.id, "Имя борда: %s" % config.board_name(message.chat.id))
+    bot.send_message(message.chat.id, "Отслеживаемый борд: %s" % config.board_name(message.chat.id))
 
 
 @bot.message_handler(commands=['ignored_boards'])

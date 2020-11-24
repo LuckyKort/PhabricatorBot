@@ -7,7 +7,9 @@ import requests
 import schedule
 import telebot
 import time
+import os
 
+from shutil import copyfile
 from .config import Config
 
 
@@ -550,6 +552,16 @@ class TaskGetter:
         schedule.cancel_job(task)
 
     @staticmethod
+    def copy_logs():
+        if os.path.isfile("logs_old.txt"):
+            os.remove("logs_old.txt")
+        copyfile("logs.txt", "logs_old.txt")
+        if os.path.isfile("logs.txt"):
+            os.remove("logs.txt")
+        open("logs.txt", 'a').close()
+        return
+
+    @staticmethod
     def schedule(chat_id: int or None = None):
         def schedule_task(config):
             if not config.get('active'):
@@ -584,6 +596,7 @@ class TaskGetter:
         try:
             if thread is None:
                 thread = Thread(target=TaskGetter.schedule)
+            schedule.every().day.at("05:00").do(TaskGetter.copy_logs)
             thread.start()
             TaskGetter.__bot.polling(True)
         except Exception as e:
