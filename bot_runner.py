@@ -77,12 +77,14 @@ def settings(message):
                       "API токен в фабрикаторе: %s\n" 
                       "Частота опроса сервера(минуты): %s\n" 
                       "Имя борды: %s\n" 
-                      "Идентификаторы игнорируемых бордов: %s") % (
+                      "Идентификаторы игнорируемых бордов: %s\n" 
+                      "Названия игнорируемых колонок: %s") % (
                       config.server(message.chat.id),
                       config.phab_api(message.chat.id),
                       config.frequency(message.chat.id),
                       config.board_name(message.chat.id),
-                      config.ignored_boards(message.chat.id)
+                      config.ignored_boards(message.chat.id),
+                      config.ignored_columns(message.chat.id),
                      ))
 
 
@@ -129,6 +131,29 @@ def ignored_boards(message):
         config.set_ignored_boards(message.chat.id, args)
     bot.send_message(message.chat.id,
                      "Идентификаторы игнорируемых бордов: %s" % config.ignored_boards(message.chat.id))
+
+
+@bot.message_handler(commands=['reset_ignored_boards'])
+def ignored_boards(message):
+    config.unset_ignored_boards(message.chat.id)
+    bot.send_message(message.chat.id, "Идентификаторы игнорируемых бордов сброшены")
+
+
+@bot.message_handler(commands=['ignored_columns'])
+def ignored_columns(message):
+    args = __extract_args(message.text)
+    if args:
+        args = ' '.join(args).split(',')
+        config.set_ignored_columns(message.chat.id, args)
+    bot.send_message(message.chat.id,
+                     "Названия игнорируемых колонок: %s" % config.ignored_columns(message.chat.id))
+
+
+@bot.message_handler(commands=['reset_ignored_columns'])
+def ignored_boards(message):
+    config.unset_ignored_columns(message.chat.id)
+    bot.send_message(message.chat.id, "Имена игнорируемых бордов сброшены")
+
 
 @bot.message_handler(commands=['last_check'])
 def last_check(message):

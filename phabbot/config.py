@@ -79,6 +79,33 @@ class Config(dict):
         chat['ignored_boards'] = ignored_boards
         self.dump()
 
+    def unset_ignored_boards(self, chat_id):
+        chat = self.chat(chat_id, False)
+        chat['ignored_boards'] = []
+        self.dump()
+
+    def ignored_columns(self, chat_id):
+        chat = self.chat(chat_id, False)
+        return chat.get('ignored_columns')
+
+    def set_ignored_columns(self, chat_id, ignored_columns):
+        chat = self.chat(chat_id, False)
+        chat['ignored_columns'] = ignored_columns
+        self.dump()
+
+    def unset_ignored_columns(self, chat_id):
+        chat = self.chat(chat_id, False)
+        chat['ignored_columns'] = []
+        self.dump()
+
+    def last_new_check(self, chat_id):
+        chat = self.chat(chat_id, False)
+        return chat.get('last_new_check')
+
+    def last_update_check(self, chat_id):
+        chat = self.chat(chat_id, False)
+        return chat.get('last_update_check')
+
     def dump(self):
         with open(self.path, 'w') as config:
             json.dump(self, config, indent=4)

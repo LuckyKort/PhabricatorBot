@@ -93,7 +93,16 @@ class TaskGetter:
     @ignored_boards.setter
     def ignored_boards(self, value: list):
         assert value is not None
-        self.__chat_config['ignore_list'] = value
+        self.__chat_config['ignored_boards'] = value
+
+    @property
+    def ignored_columns(self) -> list:
+        return self.__chat_config.get('ignored_columns')
+
+    @ignored_columns.setter
+    def ignored_columns(self, value: list):
+        assert value is not None
+        self.__chat_config['ignored_columns'] = value
 
     @staticmethod
     def configure(config: Config, bot: telebot.TeleBot or telebot.AsyncTeleBot):
@@ -287,17 +296,18 @@ class TaskGetter:
 
                             if task['result'][curr_id][j]['transactionType'] == "core:columns":
                                 if task['result'][curr_id][j]['newValue'][0]['boardPHID'] not in self.ignored_boards:
-                                    task_id = task['result'][curr_id][j]['taskID']
                                     new_col = task['result'][curr_id][j]['newValue'][0]['columnPHID']
                                     column = self.__getcolname(new_col)
-                                    name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
-                                    upd_summary[curr_num] = {"action": "move",
-                                                             "name": name,
-                                                             "task_id": task_id,
-                                                             "column": column['column'],
-                                                             "board": column['board'],
-                                                             "project": column['project']}
-                                    curr_num += 1
+                                    if column['column'] not in self.ignored_columns:
+                                        task_id = task['result'][curr_id][j]['taskID']
+                                        name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
+                                        upd_summary[curr_num] = {"action": "move",
+                                                                 "name": name,
+                                                                 "task_id": task_id,
+                                                                 "column": column['column'],
+                                                                 "board": column['board'],
+                                                                 "project": column['project']}
+                                        curr_num += 1
 
                             if task['result'][curr_id][j]['transactionType'] == "priority":
                                 task_id = task['result'][curr_id][j]['taskID']
