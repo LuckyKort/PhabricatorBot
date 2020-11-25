@@ -342,7 +342,7 @@ class TaskGetter:
         assert (results and len(results))
         if act == "new":
             for result in results.values():
-                print('Обнаружен новый таск!')
+                print('Для чата ' + str(self.chat_id) + ' обнаружен новый таск!')
                 resultstr = 'На борде <b>{0}</b> появился новый таск ' \
                             'с <b>{1}</b> приоритетом: \n \U0001F4CA <b>{2}</b> \n' \
                             '\U0001F425 Инициатор: <b>{3}</b>\n' \
@@ -360,8 +360,6 @@ class TaskGetter:
 
         elif act == "upd":
             result_list = [res for res in results.values() if int(res['task_id']) not in self.__new_ids]
-            if len(result_list) == 0:
-                print('Обновленных тасков нет')
 
             res_dict = {}
             for result in result_list:
@@ -373,7 +371,7 @@ class TaskGetter:
             result_messages = {}
 
             for result in result_list[::-1]:
-                print('Обнаружен обновленный таск!')
+                print('Для чата ' + str(self.chat_id) + ' обнаружен обновленный таск!')
 
                 if res_dict[result['task_id']] > 1:
                     if result_messages.get(result['task_id']) is None:
@@ -476,14 +474,11 @@ class TaskGetter:
         }
 
         data.update({"constraints[createdStart]": self.last_new_check})
-        print(strftime("%H:%M:%S", localtime(self.__timestamp())),
-              '- Проверяю наличие новых тасков начиная с ', self.last_new_check)
         new_r = search()
         data.pop("constraints[createdStart]")
         data.update({"constraints[modifiedStart]": self.last_update_check})
 
-        print(strftime("%H:%M:%S", localtime(self.__timestamp())),
-              '- Проверяю наличие обновленных тасков начиная с ', self.last_update_check)
+        print(strftime("%H:%M:%S", localtime(self.__timestamp())), '- Проверяю обновления для чата', self.chat_id)
         upd_r = search()
 
         new_parsed = self.__parse_results(new_r.json(), "new")
@@ -502,8 +497,6 @@ class TaskGetter:
 
         if new_parsed is not None:
             self.__send_results(new_parsed, "new")
-        else:
-            print('Новых тасков нет')
 
         if upd_parsed is not None:
             updated_tasks = self.__getupdates(upd_parsed, self.last_update_check)
@@ -512,16 +505,10 @@ class TaskGetter:
                 updated_tasks_logline = "\nUpdated_tasks: {0}".format(updated_tasks)
                 with open('logs.txt', 'a') as file:
                     file.write(updated_tasks_logline)
-            else:
-                print('Обновленных тасков нет')
-        else:
-            print('Обновленных тасков нет')
 
         self.last_new_check = TaskGetter.__serverdate_to_timestamp(new_r.headers['date'])
         self.last_update_check = TaskGetter.__serverdate_to_timestamp(upd_r.headers['date'])
         TaskGetter.__config.dump()
-
-        print("Проверка закончена, записанные timestamp:", (self.last_new_check, self.last_update_check))
 
     @staticmethod
     def stop():
@@ -542,6 +529,50 @@ class TaskGetter:
         TaskGetter.__active_tasks.pop(chat_id)
         schedule.cancel_job(task)
 
+    def checkconn(self, config, task_getter):
+        if not config.get('server'):
+            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите адрес сервера, используя"
+                                                               " команду /server Адрес в формате 'https://server.name' ")
+            return False
+        if not config.get('phab_api'):
+            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите API-токен, используя "
+                                                               "команду /phab_api Токен")
+            return False
+        if not config.get('board_name'):
+            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите ID борда который "
+                                                               "необходимо мониторить, используя команду /board ID. "
+                                                               "\nДля того, чтобы узнать ID борда введите команду"
+                                                               "/project_id Название")
+            return False
+        try:
+            url = config.get('server') + '/api/user.whoami'
+            data = {
+                "api.token": config.get('phab_api')
+            }
+            result = requests.post(url, params=data, allow_redirects=False, verify=False)
+            if not result:
+                TaskGetter.__bot.send_message(task_getter.chat_id,
+                                              "Проверьте правильность указания адреса фабрикатора")
+                return False
+            if result.headers['Content-Type'] != 'application/json':
+                TaskGetter.__bot.send_message(task_getter.chat_id,
+                                              "Проверьте правильность указания адреса фабрикатора")
+                return False
+            json = result.json()
+            if json['error_code'] == 'ERR-INVALID-AUTH':
+                err = json['error_info']
+                TaskGetter.__bot.send_message(task_getter.chat_id, "Произошла ошибка: " + err)
+                return False
+            return True
+        except requests.exceptions.ConnectionError as ce:
+            TaskGetter.__bot.send_message(task_getter.chat_id,
+                                          "Проверьте правильность введенного адреса сервера")
+            return False
+        except Exception as e:
+            TaskGetter.__bot.send_message(task_getter.chat_id,
+                                          "При попытке подключиться к серверу произошла ошибка: " + str(e))
+            return False
+
     @staticmethod
     def schedule(chat_id: int or None = None):
         def schedule_task(config):
@@ -550,6 +581,8 @@ class TaskGetter:
             task_getter = TaskGetter(config)
             assert task_getter.chat_id is not None
             if TaskGetter.__active_tasks.get(task_getter.chat_id):
+                return
+            if not task_getter.checkconn(config, task_getter):
                 return
             task_getter.tasks_search()
             TaskGetter.__active_tasks[task_getter.chat_id] = \

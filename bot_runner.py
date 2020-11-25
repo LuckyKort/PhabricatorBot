@@ -36,7 +36,7 @@ def start(message):
                      '\n/server - отобразить текущий адрес сервера,'
                      '\n/phab_api - отобразить текущий токен'
                      '\n/frequency - отобразить текущую частоту обращения к серверу (в минутах)'
-                     '\n/board_name - отобразить имя борды, за которой нужно следить'
+                     '\n/board - отобразить имя борды, за которой нужно следить'
                      '\n/ignored_boards - отобразить список идентификаторов бордов, '
                      '\nобновления в которых стоит игнорировать'
                      '\n/ignored_columns - отобразить список названий колонок, '
@@ -45,7 +45,7 @@ def start(message):
                      '\n/server АдресСервера - задать адрес сервера'
                      '\n/phab_api API-токен - задать API-токен, выданный фабрикатором'
                      '\n/frequency ЦЕЛОЕ - задать частоту обращения к серверу (в минутах)'
-                     '\n/board_name ИмяБорды - задать имя борды, за которой нужно следить'
+                     '\n/board ИмяБорды - задать имя борды, за которой нужно следить'
                      '\n/ignored_boards Ид1 Ид2 ... - задать список идентификаторов бордов, '
                      '\nобновления в которых стоит игнорировать'
                      '\n/reset_ignored_boards - сбросить список игнорируемых бордов '
@@ -148,12 +148,12 @@ def frequency(message):
     bot.send_message(message.chat.id, "Частота опроса сервера (минуты): %d" % config.frequency(message.chat.id))
 
 
-@bot.message_handler(commands=['board_name'])
+@bot.message_handler(commands=['board'])
 def board_name(message):
     args = __extract_args(message.text)
     if args:
         config.set_board_name(message.chat.id, args[0])
-    bot.send_message(message.chat.id, "Имя борда: %s" % config.board_name(message.chat.id))
+    bot.send_message(message.chat.id, "Отслеживаемый борд: %s" % config.board_name(message.chat.id))
 
 
 @bot.message_handler(commands=['ignored_boards'])
