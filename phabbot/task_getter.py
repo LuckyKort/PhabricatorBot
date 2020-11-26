@@ -21,6 +21,7 @@ class TaskGetter:
         self.__chat_config = config
         # TODO: Сейчас запоминание идентификаторов новых заданий выглядит как костыль
         self.__new_ids = []
+        self.__timenow = strftime("%H:%M:%S", localtime(self.__timestamp()))
         return
 
     @property
@@ -344,7 +345,8 @@ class TaskGetter:
         assert (results and len(results))
         if act == "new":
             for result in results.values():
-                print('Для чата ' + str(self.chat_id) + ' обнаружен новый таск - T' + result['task_id'])
+                print(self.__timenow + ': Для чата ' + str(self.chat_id) +
+                      ' обнаружен новый таск - T' + result['task_id'])
                 resultstr = 'На борде <b>{0}</b> появился новый таск ' \
                             'с <b>{1}</b> приоритетом: \n \U0001F4CA <b>{2}</b> \n' \
                             '\U0001F425 Инициатор: <b>{3}</b>\n' \
@@ -368,7 +370,8 @@ class TaskGetter:
                         "\n\U0001F4DD " + body[0].upper() + body[1:]
                     )
                 else:
-                    print('Для чата ' + str(self.chat_id) + ' обнаружен обновленный таск - T' + result['task_id'])
+                    print(self.__timenow + ': Для чата ' + str(self.chat_id) +
+                          ' обнаружен обновленный таск - T' + result['task_id'])
                     TaskGetter.__bot.send_message(self.chat_id, head + body + footer, parse_mode='HTML')
 
             result_list = [res for res in results.values() if int(res['task_id']) not in self.__new_ids]
@@ -433,7 +436,8 @@ class TaskGetter:
                 messagestr = ""
                 for actions in message['message']:
                     messagestr += actions
-                print('Для чата ' + str(self.chat_id) + ' обнаружен обновленный таск - T' + message['id'])
+                print(self.__timenow + ': Для чата ' + str(self.chat_id) +
+                      ' обнаружен обновленный таск - T' + message['id'])
                 resultstr = '\U0001F4CA В таске <b>{0}</b> произошли изменения:\n ' \
                             '{1} \n' \
                             '\U0001F449 <a href ="{2}/T{3}">Открыть таск</a>'.format(message['name'],
@@ -472,7 +476,6 @@ class TaskGetter:
         data.pop("constraints[createdStart]")
         data.update({"constraints[modifiedStart]": self.last_update_check})
 
-        print(strftime("%H:%M:%S", localtime(self.__timestamp())), '- Проверяю обновления для чата', self.chat_id)
         upd_r = search()
 
         new_parsed = self.__parse_results(new_r.json(), "new")
