@@ -12,6 +12,7 @@ setup(
     install_requires=[
         'requests>=2.7.0',
         'os',
+        'telebot',
         'pyTelegramBotAPI',
         'schedule',
         'json'

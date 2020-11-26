@@ -531,8 +531,9 @@ class TaskGetter:
 
     def checkconn(self, config, task_getter):
         if not config.get('server'):
-            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите адрес сервера, используя"
-                                                               " команду /server Адрес в формате 'https://server.name' ")
+            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите адрес сервера, "
+                                                               "используя команду /server Адрес в "
+                                                               "формате 'https://server.name' ")
             return False
         if not config.get('phab_api'):
             TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите API-токен, используя "
@@ -564,7 +565,7 @@ class TaskGetter:
                 TaskGetter.__bot.send_message(task_getter.chat_id, "Произошла ошибка: " + err)
                 return False
             return True
-        except requests.exceptions.ConnectionError as ce:
+        except requests.exceptions.ConnectionError:
             TaskGetter.__bot.send_message(task_getter.chat_id,
                                           "Проверьте правильность введенного адреса сервера")
             return False

@@ -66,7 +66,7 @@ def unschedule(message):
 
 
 @bot.message_handler(commands=['reset'])
-def reset(message):
+def reset():
     pass
 
 
@@ -195,7 +195,6 @@ def ignored_columns(message):
 def ignored_boards(message):
     config.unset_ignored_columns(message.chat.id)
     bot.send_message(message.chat.id, "Имена игнорируемых бордов сброшены")
-
 
 
 @bot.message_handler(commands=['reset_ignored_boards'])
