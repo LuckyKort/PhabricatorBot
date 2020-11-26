@@ -109,13 +109,11 @@ def get_project(message):
 def settings(message):
     bot.send_message(message.chat.id,
                      ("* Адрес сервера: %s\n" 
-                      "* API токен в фабрикаторе: %s\n" 
                       "* Частота опроса сервера (минуты): %s\n" 
                       "* Имя борды: %s\n" 
                       "* Идентификаторы игнорируемых бордов: \n%s\n" 
                       "* Названия игнорируемых колонок: \n%s") % (
                       config.server(message.chat.id),
-                      config.phab_api(message.chat.id),
                       config.frequency(message.chat.id),
                       config.board_name(message.chat.id),
                       ','.join(config.ignored_boards(message.chat.id)),
@@ -136,7 +134,12 @@ def phab_api(message):
     args = __extract_args(message.text)
     if args:
         config.set_phab_api(message.chat.id, args[0])
-    bot.send_message(message.chat.id, "API токен в фабрикаторе: %s" % config.phab_api(message.chat.id))
+        bot.delete_message(message.chat.id, message.message_id)
+        bot.send_message(message.chat.id, "API токен установлен")
+    elif config.phab_api(message.chat.id) is not None:
+        bot.send_message(message.chat.id, "API токен установлен, но в целях безопасноти отображен не будет")
+    else:
+        bot.send_message(message.chat.id, "API токен не установлен")
 
 
 @bot.message_handler(commands=['frequency'])
