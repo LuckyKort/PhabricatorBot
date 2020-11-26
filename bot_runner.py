@@ -116,8 +116,10 @@ def settings(message):
                       config.server(message.chat.id),
                       config.frequency(message.chat.id),
                       config.board_name(message.chat.id),
-                      ','.join(config.ignored_boards(message.chat.id)),
-                      ','.join(config.ignored_columns(message.chat.id)),
+                      (','.join(config.ignored_boards(message.chat.id))) if
+                      config.ignored_boards(message.chat.id) is not None else "Список пуст",
+                      (','.join(config.ignored_columns(message.chat.id))) if
+                      config.ignored_columns(message.chat.id) is not None else "Список пуст",
                      ))
 
 
@@ -135,7 +137,7 @@ def phab_api(message):
     if args:
         config.set_phab_api(message.chat.id, args[0])
         bot.delete_message(message.chat.id, message.message_id)
-        bot.send_message(message.chat.id, "API токен установлен")
+        bot.send_message(message.chat.id, "API токен установлен, сообщение с токеном удалено")
     elif config.phab_api(message.chat.id) is not None:
         bot.send_message(message.chat.id, "API токен установлен, но в целях безопасноти отображен не будет")
     else:
@@ -163,7 +165,7 @@ def ignored_boards(message):
     args = __extract_args(message.text)
     if args:
         config.set_ignored_boards(message.chat.id, args)
-    if len(config.ignored_boards(message.chat.id)) > 0:
+    if config.ignored_boards(message.chat.id) is not None and len(config.ignored_boards(message.chat.id)) > 0:
         ignored_boards_list = ','.join(config.ignored_boards(message.chat.id))
     else:
         ignored_boards_list = 'Список пуст'
@@ -182,7 +184,7 @@ def ignored_columns(message):
     if args:
         args = ' '.join(args).split(',')
         config.set_ignored_columns(message.chat.id, args)
-    if len(config.ignored_columns(message.chat.id)) > 0:
+    if config.ignored_columns(message.chat.id) is not None and len(config.ignored_columns(message.chat.id)) > 0:
         ignored_columns_list = ','.join(config.ignored_columns(message.chat.id))
     else:
         ignored_columns_list = 'Список пуст'
