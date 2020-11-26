@@ -342,7 +342,7 @@ class TaskGetter:
         assert (results and len(results))
         if act == "new":
             for result in results.values():
-                print('Для чата ' + str(self.chat_id) + ' обнаружен новый таск!')
+                print('Для чата ' + str(self.chat_id) + ' обнаружен новый таск - T' + result['task_id'])
                 resultstr = 'На борде <b>{0}</b> появился новый таск ' \
                             'с <b>{1}</b> приоритетом: \n \U0001F4CA <b>{2}</b> \n' \
                             '\U0001F425 Инициатор: <b>{3}</b>\n' \
@@ -359,6 +359,16 @@ class TaskGetter:
                 self.__new_ids.append(int(result['task_id']))
 
         elif act == "upd":
+            def sendupd(head, body):
+                footer = '\n\U0001F449 <a href ="{0}/T{1}">Открыть таск</a>'.format(self.server, result['task_id'])
+                if res_dict[result['task_id']] > 1:
+                    result_messages[result['task_id']]['message'].append(
+                        "\n\U0001F4DD " + body[0].upper() + body[1:]
+                    )
+                else:
+                    print('Для чата ' + str(self.chat_id) + ' обнаружен обновленный таск - T' + result['task_id'])
+                    TaskGetter.__bot.send_message(self.chat_id, head + body + footer, parse_mode='HTML')
+
             result_list = [res for res in results.values() if int(res['task_id']) not in self.__new_ids]
 
             res_dict = {}
@@ -371,7 +381,6 @@ class TaskGetter:
             result_messages = {}
 
             for result in result_list[::-1]:
-                print('Для чата ' + str(self.chat_id) + ' обнаружен обновленный таск!')
 
                 if res_dict[result['task_id']] > 1:
                     if result_messages.get(result['task_id']) is None:
@@ -380,21 +389,13 @@ class TaskGetter:
                         result_messages[result['task_id']].update({'id': result['task_id']})
                         result_messages[result['task_id']]['message'] = []
 
-                footerstr = '\n\U0001F449 <a href ="{0}/T{1}">Открыть таск</a>'.format(self.server,
-                                                                                       result['task_id'])
-
                 if result['action'] == "reassign":
                     headstr = '\U0001F4CA В таске <b>{0}</b> '.format(result['name'])
                     resultstr = 'был изменен исполнитель: \n' \
                                 '\U0001F425 Предыдущий исполнитель: <b>{0}</b>\n' \
                                 '\U0001F425 Новый исполнитель: <b>{1}</b>\n'.format(result['oldowner'],
                                                                                     result['newowner'])
-                    if res_dict[result['task_id']] > 1:
-                        result_messages[result['task_id']]['message'].append(
-                            "\n\U0001F4DD " + resultstr[0].upper() + resultstr[1:]
-                        )
-                    else:
-                        TaskGetter.__bot.send_message(self.chat_id, headstr + resultstr + footerstr, parse_mode='HTML')
+                    sendupd(headstr, resultstr)
 
                 if result['action'] == "move":
 
@@ -408,12 +409,7 @@ class TaskGetter:
                                                                              self.server,
                                                                              result['task_id']
                                                                              )
-                    if res_dict[result['task_id']] > 1:
-                        result_messages[result['task_id']]['message'].append(
-                            "\n\U0001F4DD " + resultstr[0].upper() + resultstr[1:]
-                        )
-                    else:
-                        TaskGetter.__bot.send_message(self.chat_id, headstr + resultstr + footerstr, parse_mode='HTML')
+                    sendupd(headstr, resultstr)
 
                 if result['action'] == "priority":
                     headstr = '\U0001F4CA В таске <b>{0}</b> '.format(result['name'])
@@ -422,12 +418,7 @@ class TaskGetter:
                                                                       result['old_prior'],
                                                                       result['new_prior'],
                                                                       )
-                    if res_dict[result['task_id']] > 1:
-                        result_messages[result['task_id']]['message'].append(
-                            "\n\U0001F4DD " + resultstr[0].upper() + resultstr[1:]
-                        )
-                    else:
-                        TaskGetter.__bot.send_message(self.chat_id, headstr + resultstr + footerstr, parse_mode='HTML')
+                    sendupd(headstr, resultstr)
 
                 if result['action'] == "comment":
                     resultstr = '\n\U0001F4AC {0} добавил(-а) комментарий: \n<b>{1}</b>\n'.format(result['author'],
@@ -440,6 +431,7 @@ class TaskGetter:
                 messagestr = ""
                 for actions in message['message']:
                     messagestr += actions
+                print('Для чата ' + str(self.chat_id) + ' обнаружен обновленный таск - T' + message['id'])
                 resultstr = '\U0001F4CA В таске <b>{0}</b> произошли изменения:\n ' \
                             '{1} \n' \
                             '\U0001F449 <a href ="{2}/T{3}">Открыть таск</a>'.format(message['name'],
