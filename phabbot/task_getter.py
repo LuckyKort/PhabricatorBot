@@ -521,7 +521,8 @@ class TaskGetter:
         TaskGetter.__active_tasks.pop(chat_id)
         schedule.cancel_job(task)
 
-    def checkconn(self, config, task_getter):
+    @staticmethod
+    def checkconn(config, task_getter):
         if not config.get('server'):
             TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите адрес сервера, "
                                                                "используя команду /server Адрес в "
