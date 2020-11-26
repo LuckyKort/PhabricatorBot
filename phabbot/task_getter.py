@@ -318,13 +318,15 @@ class TaskGetter:
                             if task['result'][curr_id][j]['transactionType'] == "core:comment":
                                 task_id = task['result'][curr_id][j]['taskID']
                                 name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
-                                comment = re.sub(r'{([\s\S]+?)}', '[Вложение]', task['result'][curr_id][j]['comments'])
+                                attach = re.sub(r'{([\s\S]+?)}', '[Вложение]', task['result'][curr_id][j]['comments'])
+                                author = re.findall(r'@(.*?)\s', attach)
+                                quote = re.sub(r'^(^>).*', 'Цитата\n> : ' + author[0] + ' писал:', attach)
                                 author = self.__whois(task['result'][curr_id][j]['authorPHID'])['realname']
                                 upd_summary[curr_num] = {"action": "comment",
                                                          "name": name,
                                                          "task_id": task_id,
-                                                         "comment": comment[0:100] + '..' if
-                                                         (len(comment) > 100) else comment,
+                                                         "comment": quote[0:100] + '...' if
+                                                         (len(quote) > 100) else quote,
                                                          "author": author}
                                 curr_num += 1
 
