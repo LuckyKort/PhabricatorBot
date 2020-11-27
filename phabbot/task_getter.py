@@ -89,7 +89,7 @@ class TaskGetter:
 
     @property
     def ignored_boards(self) -> list:
-        return self.__chat_config.get('ignored_boards')
+        return self.__chat_config.get('ignored_boards', [])
 
     @ignored_boards.setter
     def ignored_boards(self, value: list):
@@ -162,7 +162,7 @@ class TaskGetter:
                 json_dict = col_r.json()
                 col = json_dict['result']['data'][0]['fields']['name']
                 project_phid = json_dict['result']['data'][0]['fields']['project']['phid']
-                project = self.__getproject(project_phid, 'phid')
+                project = self.__getproject(project_phid, 'id')
                 phboard = project['board']
                 phproject = project['project']
 
@@ -179,7 +179,7 @@ class TaskGetter:
         url = '{0}/api/project.search'.format(self.server)
         try:
             constraint = {
-                'phid': "constraints[phids][0]"
+                'id': "constraints[phids][0]"
             }.get(act, "constraints[name]")
 
             data = {
@@ -189,12 +189,13 @@ class TaskGetter:
 
             proj_r = requests.post(url, params=data, verify=False)
             json_dict = proj_r.json()
-            phboard = json_dict['result']['data'][0]['fields']['name']
+            phboard = None
             phproject = None
-            if json_dict['result']['data'][0]['fields']['milestone'] is not None:
-                if int(json_dict['result']['data'][0]['fields']['depth']) > 0:
-                    phproject = json_dict['result']['data'][0]['fields']['parent']['name']
-
+            if len(json_dict['result']['data']) > 0:
+                phboard = json_dict['result']['data'][0]['fields']['name']
+                if json_dict['result']['data'][0]['fields']['milestone'] is not None:
+                    if int(json_dict['result']['data'][0]['fields']['depth']) > 0:
+                        phproject = json_dict['result']['data'][0]['fields']['parent']['name']
             return {'board': phboard, 'project': phproject}
         except Exception as e:
             print('При получении имени проекта произошла ошибка: ', e)
@@ -323,9 +324,12 @@ class TaskGetter:
                                     replace_attach = re.sub(r'{([\s\S]+?)}', '[Вложение]',
                                                             task['result'][curr_id][j]['comments'])
                                     quote_author = re.findall(r'@(.*?)\s', replace_attach)
+                                    linktext = re.findall(r'\[\[.*\|\s(.*?)\]\]', replace_attach)
+                                    replace_links = re.sub(r'\[\[(.*?)\]\]', linktext[0] if len(linktext) > 0 else
+                                                           "ссылка", replace_attach)
                                     comment = re.sub(r'^(^>).*', 'Цитата\n> : ' +
                                                                  quote_author[0] if len(quote_author) > 0 else
-                                                                 "Неизвестный" + ' писал:', replace_attach)
+                                                                 "Неизвестный" + ' писал:', replace_links)
                                 else:
                                     comment = "Комментарий удален"
                                 author = self.__whois(task['result'][curr_id][j]['authorPHID'])['realname']
@@ -352,9 +356,9 @@ class TaskGetter:
         if act == "new":
             for result in results.values():
                 print(self.__timenow + ': Для чата ' + str(self.chat_id) +
-                      ' обнаружен новый таск - T' + result['task_id'])
+                      ' обнаружен новый таск - T' + str(result['task_id']))
                 resultstr = 'На борде <b>{0}</b> появился новый таск ' \
-                            'с <b>{1}</b> приоритетом: \n \U0001F4CA <b>{2}</b> \n' \
+                            'с <b>{1}</b> приоритетом: \n\U0001F4CA <b>{2}</b> \n' \
                             '\U0001F425 Инициатор: <b>{3}</b>\n' \
                             '\U0001F425 Исполнитель: <b>{4}</b>\n' \
                             '\n\U0001F449 <a href ="{5}/T{6}">Открыть таск</a>'.format(result['board'],
