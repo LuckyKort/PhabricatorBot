@@ -61,13 +61,13 @@ class Config(dict):
         chat['frequency'] = frequency
         self.dump()
 
-    def board_name(self, chat_id):
+    def boards(self, chat_id) -> list:
         chat = self.chat(chat_id, False)
-        return chat.get('board_name')
+        return chat.get('boards')
 
-    def set_board_name(self, chat_id, board_name):
+    def set_boards(self, chat_id, boards: list):
         chat = self.chat(chat_id, False)
-        chat['board_name'] = board_name
+        chat['boards'] = boards
         self.dump()
 
     def ignored_boards(self, chat_id):
