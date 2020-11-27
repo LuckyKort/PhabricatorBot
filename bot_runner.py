@@ -39,17 +39,17 @@ def start(message):
                      '\n/ignored_boards - отобразить список идентификаторов бордов, '
                      '\nобновления в которых стоит игнорировать'
                      '\n/ignored_columns - отобразить список названий колонок, '
-                     '\nобновления в которых стоит игнорировать'
+                     '\nперемещения по которым стоит игнорировать'
                      '\n\n<b>Настройка:</b>'
                      '\n/server АдресСервера - задать адрес сервера'
                      '\n/phab_api API-токен - задать API-токен, выданный фабрикатором'
                      '\n/frequency ЦЕЛОЕ - задать частоту обращения к серверу (в минутах)'
                      '\n/boards ИмяБорды - задать имя борды, за которой нужно следить'
                      '\n/ignored_boards Ид1 Ид2 ... - задать список идентификаторов бордов, '
-                     '\nобновления в которых стоит игнорировать'
+                     '\nперемещения по которым стоит игнорировать'
                      '\n/reset_ignored_boards - сбросить список игнорируемых бордов '
                      '\n/ignored_columns Ид1 Ид2 ... - задать список названий колонок, '
-                     '\nобновления в которых стоит игнорировать'
+                     '\nперемещения в которые стоит игнорировать '
                      '\n/reset_ignored_boards - сбросить список игнорируемых колонок '
                      '\n\n<b>Диагностика:</b>'
                      '\n/last_check - штампы времени последней проверки', parse_mode='HTML')
@@ -74,6 +74,29 @@ def reset():
 def status(message):
     activestr = "Активен" if config.active(message.chat.id) else "Отдыхает"
     bot.send_message(message.chat.id, "Статус мониторинга: " + activestr)
+
+
+def getptojectname(chatid, phids):
+    if not config.boards(chatid):
+        return phids
+    if not config.server(chatid):
+        return phids
+    if not config.phab_api(chatid):
+        return phids
+    result = str()
+    for phid in phids:
+        url = '{0}/api/project.search'.format(config.server(chatid))
+        data = {
+            "api.token": config.phab_api(chatid),
+            "constraints[phids][0]": phid
+        }
+        r = requests.post(url, params=data, verify=False)
+        json = r.json()
+        if len(json) > 0:
+            result += "\n<b>%s</b>: %s" % (json['result']['data'][0]['fields']['name'], phid)
+    if len(result) > 0:
+        return result
+    return phids
 
 
 @bot.message_handler(commands=['project_id'])
@@ -111,14 +134,14 @@ def settings(message):
                      ("* Адрес сервера: %s\n" 
                       "* Частота опроса сервера (минуты): %s\n" 
                       "* Отслеживаемые борды: %s\n" 
-                      "* Идентификаторы игнорируемых бордов: \n%s\n" 
-                      "* Названия игнорируемых колонок: \n%s") % (
+                      "* Борды, перемещения по которым игнорируются: %s\n" 
+                      "* Колонки, перемещения в которые игнорируются: \n%s") % (
                       config.server(message.chat.id),
                       config.frequency(message.chat.id) or 2,
-                      (', '.join(config.boards(message.chat.id))) or "Список пуст",
-                      (', '.join(config.ignored_boards(message.chat.id))) or "Список пуст",
+                      getptojectname(message.chat.id, config.boards(message.chat.id)) or "Список пуст",
+                      getptojectname(message.chat.id, config.ignored_boards(message.chat.id)) or "Список пуст",
                       (', '.join(config.ignored_columns(message.chat.id))) or "Список пуст",
-                     ))
+                     ), parse_mode='HTML')
 
 
 @bot.message_handler(commands=['server'])
@@ -161,7 +184,8 @@ def boards(message):
     if args:
         config.set_boards(message.chat.id, args)
     bot.send_message(message.chat.id, "Отслеживаемые борды: %s" %
-                     (', '.join(config.boards(message.chat.id))) or "Список пуст")
+                     (getptojectname(message.chat.id, config.boards(message.chat.id))) or
+                     "Список пуст", parse_mode='HTML')
 
 
 @bot.message_handler(commands=['ignored_boards'])
@@ -169,8 +193,9 @@ def ignored_boards(message):
     args = __extract_args(message.text)
     if args:
         config.set_ignored_boards(message.chat.id, args)
-    bot.send_message(message.chat.id, "Игнорируемые борды: \n%s" %
-                     (', '.join(config.ignored_boards(message.chat.id))) or "Список пуст")
+    bot.send_message(message.chat.id, "Борды, перемещения по которым игнорируются:%s" %
+                     (getptojectname(message.chat.id, config.ignored_boards(message.chat.id))) or
+                     "Список пуст", parse_mode='HTML')
 
 
 @bot.message_handler(commands=['reset_ignored_boards'])
@@ -185,7 +210,7 @@ def ignored_columns(message):
     if args:
         args = ' '.join(args).split(',')
         config.set_ignored_columns(message.chat.id, args)
-    bot.send_message(message.chat.id, "Игнорируемые колонки: \n%s" %
+    bot.send_message(message.chat.id, "Колонки, перемещения в которые игнорируются: \n%s" %
                      (', '.join(config.ignored_columns(message.chat.id))) or "Список пуст")
 
 

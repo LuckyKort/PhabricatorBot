@@ -85,7 +85,7 @@ class TaskGetter:
     @boards.setter
     def boards(self, value: list):
         assert value is not None
-        self.__chat_config['boards'] = value
+        self.__chat_config['boards'] = [{v: self.__getproject(v, "id")} for v in value]
 
     @property
     def ignored_boards(self) -> list:
