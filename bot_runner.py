@@ -92,8 +92,10 @@ def getptojectname(chatid, phids):
         }
         r = requests.post(url, params=data, verify=False)
         json = r.json()
+        name = ("<b>%s</b>: " % (json['result']['data'][0]['fields']['name'])) if len(json['result']['data']) \
+            else "<b>Неизвестен: </b>"
         if len(json) > 0:
-            result += "\n<b>%s</b>: %s" % (json['result']['data'][0]['fields']['name'], phid)
+            result += "\n%s%s" % (name, phid)
     if len(result) > 0:
         return result
     return phids
@@ -131,11 +133,11 @@ def get_project(message):
 @bot.message_handler(commands=['settings'])
 def settings(message):
     bot.send_message(message.chat.id,
-                     ("* Адрес сервера: %s\n" 
-                      "* Частота опроса сервера (минуты): %s\n" 
-                      "* Отслеживаемые борды: %s\n" 
-                      "* Борды, перемещения по которым игнорируются: %s\n" 
-                      "* Колонки, перемещения в которые игнорируются: \n%s") % (
+                     ("\U0001F3E0 Адрес сервера: %s\n" 
+                      "\n\u23F0 Частота опроса сервера (минуты): %s\n" 
+                      "\n\U0001F440 Отслеживаемые борды: %s\n" 
+                      "\n\U0001F648 Борды, перемещения по которым игнорируются: %s\n" 
+                      "\n\U0001F648 Колонки, перемещения в которые игнорируются: \n%s") % (
                       config.server(message.chat.id),
                       config.frequency(message.chat.id) or 2,
                       getptojectname(message.chat.id, config.boards(message.chat.id)) or "Список пуст",
@@ -149,7 +151,7 @@ def server(message):
     args = __extract_args(message.text)
     if args:
         config.set_server(message.chat.id, args[0])
-    bot.send_message(message.chat.id, "Адрес сервера: %s" % config.server(message.chat.id))
+    bot.send_message(message.chat.id, "\U0001F3E0 Адрес сервера: %s" % config.server(message.chat.id))
 
 
 @bot.message_handler(commands=['phab_api'])
@@ -171,11 +173,11 @@ def frequency(message):
     if args:
         if int(args[0]) > 1:
             config.set_frequency(message.chat.id, int(args[0]))
-            bot.send_message(message.chat.id,
-                             "Частота опроса сервера (минуты): %d" % (config.frequency(message.chat.id) or 2))
         else:
             bot.send_message(message.chat.id, "Давайте уважать фабрикатор "
                                               "и не задалбывать его частыми запросами \U0001F609")
+    bot.send_message(message.chat.id,
+                     "\u23F0 Частота опроса сервера (минуты): %d" % (config.frequency(message.chat.id) or 2))
 
 
 @bot.message_handler(commands=['boards'])
@@ -183,7 +185,7 @@ def boards(message):
     args = __extract_args(message.text)
     if args:
         config.set_boards(message.chat.id, args)
-    bot.send_message(message.chat.id, "Отслеживаемые борды: %s" %
+    bot.send_message(message.chat.id, "\U0001F440 Отслеживаемые борды: %s" %
                      (getptojectname(message.chat.id, config.boards(message.chat.id))) or
                      "Список пуст", parse_mode='HTML')
 
@@ -193,7 +195,7 @@ def ignored_boards(message):
     args = __extract_args(message.text)
     if args:
         config.set_ignored_boards(message.chat.id, args)
-    bot.send_message(message.chat.id, "Борды, перемещения по которым игнорируются:%s" %
+    bot.send_message(message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются:%s" %
                      (getptojectname(message.chat.id, config.ignored_boards(message.chat.id))) or
                      "Список пуст", parse_mode='HTML')
 
@@ -210,7 +212,7 @@ def ignored_columns(message):
     if args:
         args = ' '.join(args).split(',')
         config.set_ignored_columns(message.chat.id, args)
-    bot.send_message(message.chat.id, "Колонки, перемещения в которые игнорируются: \n%s" %
+    bot.send_message(message.chat.id, "\U0001F648 Колонки, перемещения в которые игнорируются: \n%s" %
                      (', '.join(config.ignored_columns(message.chat.id))) or "Список пуст")
 
 
