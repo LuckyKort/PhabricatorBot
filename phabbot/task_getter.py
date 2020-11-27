@@ -79,13 +79,13 @@ class TaskGetter:
         self.__chat_config['frequency'] = value
 
     @property
-    def board_name(self) -> str:
-        return self.__chat_config.get('board_name')
+    def boards(self) -> list:
+        return self.__chat_config.get('boards')
 
-    @board_name.setter
-    def board_name(self, value: str):
+    @boards.setter
+    def boards(self, value: list):
         assert value is not None
-        self.__chat_config['board_name'] = value
+        self.__chat_config['boards'] = value
 
     @property
     def ignored_boards(self) -> list:
@@ -192,7 +192,7 @@ class TaskGetter:
             phboard = json_dict['result']['data'][0]['fields']['name']
             phproject = None
             if json_dict['result']['data'][0]['fields']['milestone'] is not None:
-                if int(json_dict['result']['data'][0]['fields']['milestone']) == 2:
+                if int(json_dict['result']['data'][0]['fields']['depth']) > 0:
                     phproject = json_dict['result']['data'][0]['fields']['parent']['name']
 
             return {'board': phboard, 'project': phproject}
@@ -222,8 +222,8 @@ class TaskGetter:
                 new_tasks = {}
                 if len(json_dict['result']['data']) > 0:
                     for i in range(len(json_dict['result']['data'])):
-                        board = self.__getproject(self.board_name, "id")['board']
-                        project = self.__getproject(self.board_name, "id")['project']
+                        board = self.__getproject(self.boards, "id")['board']
+                        project = self.__getproject(self.boards, "id")['project']
                         task_id = json_dict['result']['data'][i]['id']
                         task_name = json_dict['result']['data'][i]['fields']['name']
                         prior = int(json_dict['result']['data'][i]['fields']['priority']['value'])
@@ -474,8 +474,10 @@ class TaskGetter:
         data = {
             "api.token": self.phab_api,
             "queryKey": "open",
-            "constraints[projects][0]": self.board_name,
         }
+
+        for i in range(len(self.boards)):
+            data.update({"constraints[projects][%d]" % i: self.boards[i]})
 
         data.update({"constraints[createdStart]": self.last_new_check})
         new_r = search()
@@ -543,11 +545,11 @@ class TaskGetter:
             TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите API-токен, используя "
                                                                "команду /phab_api Токен")
             return False
-        if not config.get('board_name'):
-            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите ID борда который "
-                                                               "необходимо мониторить, используя команду /board ID. "
-                                                               "\nДля того, чтобы узнать ID борда введите команду"
-                                                               "/project_id Название")
+        if not config.get('boards'):
+            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите ID бордов которые "
+                                                               "необходимо мониторить, используя команду /boards "
+                                                               "ID1 ID2. \nДля того, чтобы узнать ID борда "
+                                                               "введите команду /project_id Название")
             return False
         try:
             url = config.get('server') + '/api/user.whoami'
