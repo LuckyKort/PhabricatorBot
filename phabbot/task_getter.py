@@ -21,6 +21,7 @@ class TaskGetter:
         self.__chat_config = config
         # TODO: Сейчас запоминание идентификаторов новых заданий выглядит как костыль
         self.__new_ids = []
+        self.__sended_ids = []
         self.__timenow = strftime("%H:%M:%S", localtime(self.__timestamp()))
         return
 
@@ -457,67 +458,69 @@ class TaskGetter:
                 TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML')
 
     def tasks_search(self):
-        def search():
-            return requests.post(url, params=data, verify=False)
+        for board in self.boards:
+            def search():
+                return requests.post(url, params=data, verify=False)
 
-        if not self.last_new_check:
-            self.last_new_check = self.__timestamp()
-        if not self.last_update_check:
-            self.last_update_check = self.last_new_check
+            if not self.last_new_check:
+                self.last_new_check = self.__timestamp()
+            if not self.last_update_check:
+                self.last_update_check = self.last_new_check
 
-        # Проверка последних обновленных задач не может быть раньше проверки новых заданий
-        assert self.last_update_check >= self.last_new_check
-        if self.last_update_check < self.last_new_check:
-            self.last_update_check = self.last_new_check
+            # Проверка последних обновленных задач не может быть раньше проверки новых заданий
+            assert self.last_update_check >= self.last_new_check
+            if self.last_update_check < self.last_new_check:
+                self.last_update_check = self.last_new_check
 
-        # TODO: Идет сброс костыльного счетчика идентификаторов
-        self.__new_ids.clear()
+            # TODO: Идет сброс костыльного счетчика идентификаторов
+            self.__new_ids.clear()
 
-        url = '{0}/api/maniphest.search'.format(self.server)
+            url = '{0}/api/maniphest.search'.format(self.server)
 
-        data = {
-            "api.token": self.phab_api,
-            "queryKey": "open",
-        }
+            data = {
+                "api.token": self.phab_api,
+                "queryKey": "open",
+                "constraints[projects][0]": board
+            }
 
-        for i in range(len(self.boards)):
-            data.update({"constraints[projects][%d]" % i: self.boards[i]})
+            data.update({"constraints[createdStart]": self.last_new_check})
+            new_r = search()
+            data.pop("constraints[createdStart]")
+            data.update({"constraints[modifiedStart]": self.last_update_check})
 
-        data.update({"constraints[createdStart]": self.last_new_check})
-        new_r = search()
-        data.pop("constraints[createdStart]")
-        data.update({"constraints[modifiedStart]": self.last_update_check})
+            upd_r = search()
 
-        upd_r = search()
+            new_parsed = self.__parse_results(new_r.json(), "new")
+            upd_parsed = self.__parse_results(upd_r.json(), "upd")
 
-        new_parsed = self.__parse_results(new_r.json(), "new")
-        upd_parsed = self.__parse_results(upd_r.json(), "upd")
+            log_item = "\n------" \
+                       "\nFrom(New): {0}" \
+                       "\nFrom(Updates): {1}" \
+                       "\nNew: {2}" \
+                       "\nUpd: {3}" \
+                       "\nNewParsed: {4}" \
+                       "\nUpdParsed: {5}".format(self.last_new_check, self.last_update_check, new_r.json(), upd_r.json(),
+                                                 new_parsed, upd_parsed)
+            with open('logs.txt', 'a') as file:
+                file.write(log_item)
 
-        log_item = "\n------" \
-                   "\nFrom(New): {0}" \
-                   "\nFrom(Updates): {1}" \
-                   "\nNew: {2}" \
-                   "\nUpd: {3}" \
-                   "\nNewParsed: {4}" \
-                   "\nUpdParsed: {5}".format(self.last_new_check, self.last_update_check, new_r.json(), upd_r.json(),
-                                             new_parsed, upd_parsed)
-        with open('logs.txt', 'a') as file:
-            file.write(log_item)
+            if new_parsed is not None:
+                self.__send_results(new_parsed, "new")
 
-        if new_parsed is not None:
-            self.__send_results(new_parsed, "new")
+            if upd_parsed is not None:
+                if upd_parsed not in self.__sended_ids:
+                    self.__sended_ids.append(upd_parsed)
+                    updated_tasks = self.__getupdates(upd_parsed, self.last_update_check)
+                    if updated_tasks is not None:
+                        self.__send_results(updated_tasks, "upd")
+                        updated_tasks_logline = "\nUpdated_tasks: {0}".format(updated_tasks)
+                        with open('logs.txt', 'a') as file:
+                            file.write(updated_tasks_logline)
 
-        if upd_parsed is not None:
-            updated_tasks = self.__getupdates(upd_parsed, self.last_update_check)
-            if updated_tasks is not None:
-                self.__send_results(updated_tasks, "upd")
-                updated_tasks_logline = "\nUpdated_tasks: {0}".format(updated_tasks)
-                with open('logs.txt', 'a') as file:
-                    file.write(updated_tasks_logline)
-
-        self.last_new_check = TaskGetter.__serverdate_to_timestamp(new_r.headers['date'])
-        self.last_update_check = TaskGetter.__serverdate_to_timestamp(upd_r.headers['date'])
-        TaskGetter.__config.dump()
+            self.last_new_check = TaskGetter.__serverdate_to_timestamp(new_r.headers['date'])
+            self.last_update_check = TaskGetter.__serverdate_to_timestamp(upd_r.headers['date'])
+            TaskGetter.__config.dump()
+        self.__sended_ids.clear()
 
     @staticmethod
     def stop():
@@ -534,9 +537,11 @@ class TaskGetter:
         TaskGetter.__config.dump()
         task = TaskGetter.__active_tasks.get(chat_id)
         if not task:
+            TaskGetter.__bot.send_message(chat_id, "\u26A1 Мониторинг уже приостановлен")
             return
         TaskGetter.__active_tasks.pop(chat_id)
         schedule.cancel_job(task)
+        TaskGetter.__bot.send_message(chat_id, "\u2705 Мониторинг приостановлен")
 
     @staticmethod
     def checkconn(config, task_getter):

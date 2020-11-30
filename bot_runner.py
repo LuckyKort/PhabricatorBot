@@ -66,6 +66,8 @@ def help_message(message):
 
 @bot.message_handler(commands=['schedule'])
 def schedule(message):
+    bot.send_message(message.chat.id, "\u2705 Мониторинг запущен" if
+                     not config.active(message.chat.id) else "\u26A1 Мониторинг уже запущен")
     TaskGetter.schedule(message.chat.id)
 
 
@@ -82,7 +84,8 @@ def reset():
 @bot.message_handler(commands=['status'])
 def status(message):
     activestr = "Активен" if config.active(message.chat.id) else "Отдыхает"
-    bot.send_message(message.chat.id, "Статус мониторинга: " + activestr)
+    emoji = "\u2705" if config.active(message.chat.id) else "\u274C"
+    bot.send_message(message.chat.id, "%s Статус мониторинга: %s" % (emoji, activestr))
 
 
 def getptojectname(chatid, phids):
@@ -104,10 +107,9 @@ def getptojectname(chatid, phids):
         }
         r = requests.post(url, params=data, verify=False)
         json = r.json()
-        name = ("<b>%s</b>: " % (json['result']['data'][0]['fields']['name'])) if len(json['result']['data']) \
-            else "<b>Неизвестен: </b>"
+        name = json['result']['data'][0]['fields']['name'] if len(json['result']['data']) else "Неизвестен"
         if len(json) > 0:
-            result += "\n%s%s" % (name, phid)
+            result += "<b>%s:</b> %s\n" % (name, phid)
     if len(result) > 0:
         return result
     return defaultstr
@@ -147,13 +149,13 @@ def settings(message):
     bot.send_message(message.chat.id,
                      ("\U0001F3E0 Адрес сервера: %s\n" 
                       "\n\u23F0 Частота опроса сервера (минуты): %s\n" 
-                      "\n\U0001F440 Отслеживаемые борды: %s\n" 
-                      "\n\U0001F648 Борды, перемещения по которым игнорируются: %s\n" 
-                      "\n\U0001F648 Колонки, перемещения в которые игнорируются: \n%s") % (
+                      "\n\U0001F440 Отслеживаемые борды: \n%s" 
+                      "\n\U0001F648 Борды, перемещения по которым игнорируются: \n%s" 
+                      "\n\U0001F648 Колонки, перемещения в которые игнорируются: \n%s\n") % (
                       config.server(message.chat.id) or "Не установлен",
-                      config.frequency(message.chat.id) or 2,
-                      getptojectname(message.chat.id, config.boards(message.chat.id)) or "Список пуст",
-                      getptojectname(message.chat.id, config.ignored_boards(message.chat.id)) or "Список пуст",
+                      config.frequency(message.chat.id) or "2 (Стандартное значение)",
+                      getptojectname(message.chat.id, config.boards(message.chat.id)) or "Список пуст\n",
+                      getptojectname(message.chat.id, config.ignored_boards(message.chat.id)) or "Список пуст\n",
                       (', '.join(config.ignored_columns(message.chat.id))) or "Список пуст"
                      ), parse_mode='HTML')
 
@@ -197,7 +199,7 @@ def boards(message):
     args = __extract_args(message.text)
     if args:
         config.set_boards(message.chat.id, args)
-    bot.send_message(message.chat.id, "\U0001F440 Отслеживаемые борды: %s" %
+    bot.send_message(message.chat.id, "\U0001F440 Отслеживаемые борды: \n%s" %
                      (getptojectname(message.chat.id, config.boards(message.chat.id))) or
                      "Список пуст", parse_mode='HTML')
 
@@ -207,15 +209,15 @@ def ignored_boards(message):
     args = __extract_args(message.text)
     if args:
         config.set_ignored_boards(message.chat.id, args)
-    bot.send_message(message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются:%s" %
-                     (getptojectname(message.chat.id, config.ignored_boards(message.chat.id))) or
-                     "Список пуст", parse_mode='HTML')
+    bot.send_message(message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются: \n%s" %
+                     (getptojectname(message.chat.id, config.ignored_boards(message.chat.id)) or "Список пуст\n"),
+                     parse_mode='HTML')
 
 
 @bot.message_handler(commands=['reset_ignored_boards'])
 def ignored_boards(message):
     config.unset_ignored_boards(message.chat.id)
-    bot.send_message(message.chat.id, "Игнорируемые борды сброшены")
+    bot.send_message(message.chat.id, "\u2705 Игнорируемые борды сброшены")
 
 
 @bot.message_handler(commands=['ignored_columns'])
@@ -225,13 +227,13 @@ def ignored_columns(message):
         args = ' '.join(args).split(',')
         config.set_ignored_columns(message.chat.id, args)
     bot.send_message(message.chat.id, "\U0001F648 Колонки, перемещения в которые игнорируются: \n%s" %
-                     (', '.join(config.ignored_columns(message.chat.id))) or "Список пуст")
+                     (', '.join(config.ignored_columns(message.chat.id)) or "Список пуст"))
 
 
 @bot.message_handler(commands=['reset_ignored_columns'])
 def ignored_boards(message):
     config.unset_ignored_columns(message.chat.id)
-    bot.send_message(message.chat.id, "Игнорируемые колонки сброшены")
+    bot.send_message(message.chat.id, "\u2705 Игнорируемые колонки сброшены")
 
 
 @bot.message_handler(commands=['last_check'])
