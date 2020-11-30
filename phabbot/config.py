@@ -63,7 +63,7 @@ class Config(dict):
 
     def boards(self, chat_id) -> list:
         chat = self.chat(chat_id, False)
-        return chat.get('boards')
+        return chat.get('boards', [])
 
     def set_boards(self, chat_id, boards: list):
         chat = self.chat(chat_id, False)
@@ -72,7 +72,7 @@ class Config(dict):
 
     def ignored_boards(self, chat_id):
         chat = self.chat(chat_id, False)
-        return chat.get('ignored_boards')
+        return chat.get('ignored_boards', [])
 
     def set_ignored_boards(self, chat_id, ignored_boards):
         chat = self.chat(chat_id, False)
@@ -86,7 +86,7 @@ class Config(dict):
 
     def ignored_columns(self, chat_id):
         chat = self.chat(chat_id, False)
-        return chat.get('ignored_columns')
+        return chat.get('ignored_columns', [])
 
     def set_ignored_columns(self, chat_id, ignored_columns):
         chat = self.chat(chat_id, False)
