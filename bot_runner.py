@@ -184,14 +184,21 @@ def phab_api(message):
 @bot.message_handler(commands=['frequency'])
 def frequency(message):
     args = __extract_args(message.text)
-    if args:
-        if int(args[0]) > 1:
-            config.set_frequency(message.chat.id, int(args[0]))
-        else:
-            bot.send_message(message.chat.id, "Давайте уважать фабрикатор "
-                                              "и не задалбывать его частыми запросами \U0001F609")
-    bot.send_message(message.chat.id,
-                     "\u23F0 Частота опроса сервера (минуты): %d" % (config.frequency(message.chat.id) or 2))
+    if not args:
+        bot.send_message(message.chat.id,
+                         "\u23F0 Частота опроса сервера (минуты): %d" % (config.frequency(message.chat.id) or 2))
+        return
+    if not args[0].isnumeric():
+        bot.send_message(message.chat.id, "Введите целочисленное значение!")
+        return
+    if int(args[0]) > 1:
+        config.set_frequency(message.chat.id, int(args[0]))
+        bot.send_message(message.chat.id,
+                         "\u23F0 Частота опроса сервера (минуты): %d" % (
+                                     config.frequency(message.chat.id) or 2))
+    else:
+        bot.send_message(message.chat.id, "Давайте уважать фабрикатор "
+                                          "и не задалбывать его частыми запросами \U0001F609")
 
 
 @bot.message_handler(commands=['boards'])
