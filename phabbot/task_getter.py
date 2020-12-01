@@ -22,8 +22,11 @@ class TaskGetter:
         # TODO: Сейчас запоминание идентификаторов новых заданий выглядит как костыль
         self.__new_ids = []
         self.__sended_ids = []
-        self.__timenow = strftime("%H:%M:%S", localtime(self.__timestamp()))
         return
+
+    @staticmethod
+    def __timenow():
+        return strftime("%H:%M:%S", localtime(TaskGetter.__timestamp()))
 
     @property
     def server(self) -> str:
@@ -356,7 +359,7 @@ class TaskGetter:
         assert (results and len(results))
         if act == "new":
             for result in results.values():
-                print(self.__timenow + ': Для чата ' + str(self.chat_id) +
+                print(TaskGetter.__timenow() + ': Для чата ' + str(self.chat_id) +
                       ' обнаружен новый таск - T' + str(result['task_id']))
                 resultstr = 'На борде <b>{0}</b> появился новый таск ' \
                             'с <b>{1}</b> приоритетом: \n\U0001F4CA <b>{2}</b> \n' \
@@ -381,7 +384,7 @@ class TaskGetter:
                         "\n\U0001F4DD " + body[0].upper() + body[1:]
                     )
                 else:
-                    print(self.__timenow + ': Для чата ' + str(self.chat_id) +
+                    print(self.__timenow() + ': Для чата ' + str(self.chat_id) +
                           ' обнаружен обновленный таск - T' + result['task_id'])
                     TaskGetter.__bot.send_message(self.chat_id, head + body + footer, parse_mode='HTML')
 
@@ -447,7 +450,7 @@ class TaskGetter:
                 messagestr = ""
                 for actions in message['message']:
                     messagestr += actions
-                print(self.__timenow + ': Для чата ' + str(self.chat_id) +
+                print(TaskGetter.__timenow() + ': Для чата ' + str(self.chat_id) +
                       ' обнаружен обновленный таск - T' + message['id'])
                 resultstr = '\U0001F4CA В таске <b>{0}</b> произошли изменения:\n ' \
                             '{1} \n' \
