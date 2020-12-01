@@ -88,6 +88,12 @@ def status(message):
     bot.send_message(message.chat.id, "%s Статус мониторинга: %s" % (emoji, activestr))
 
 
+def checkconfig(chatid):
+    if config.boards(chatid) and config.server(chatid) and config.phab_api(chatid):
+        bot.send_message(chatid, "Бот готов к работе. Можете сконфигурировать остальные "
+                                 "настройки или начать мониторинг командой /schedule")
+
+
 def getptojectname(chatid, phids):
     defaultstr = str()
     for phid in phids:
@@ -165,6 +171,7 @@ def server(message):
     args = __extract_args(message.text)
     if args:
         config.set_server(message.chat.id, args[0])
+        checkconfig(message.chat.id)
     bot.send_message(message.chat.id, "\U0001F3E0 Адрес сервера: %s" % config.server(message.chat.id))
 
 
@@ -173,6 +180,7 @@ def phab_api(message):
     args = __extract_args(message.text)
     if args:
         config.set_phab_api(message.chat.id, args[0])
+        checkconfig(message.chat.id)
         bot.delete_message(message.chat.id, message.message_id)
         bot.send_message(message.chat.id, "API токен установлен, сообщение с токеном удалено")
     elif config.phab_api(message.chat.id) is not None:
@@ -206,6 +214,7 @@ def boards(message):
     args = __extract_args(message.text)
     if args:
         config.set_boards(message.chat.id, args)
+        checkconfig(message.chat.id)
     bot.send_message(message.chat.id, "\U0001F440 Отслеживаемые борды: \n%s" %
                      (getptojectname(message.chat.id, config.boards(message.chat.id))) or
                      "Список пуст", parse_mode='HTML')
