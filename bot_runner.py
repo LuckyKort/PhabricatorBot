@@ -20,6 +20,10 @@ def __extract_args(command_text: str):
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    title = message.chat.title
+    if not title:
+        title = r"%s %s (@%s)" % (message.chat.first_name, message.chat.last_name, message.chat.username)
+    config.set_name(message.chat.id, title)
     bot.send_message(message.chat.id, 'Для начала работы бота вам необходимо сконфигурировать бота.'
                                       '\nДоступные команды для конфигурации бота описаны в <b>"/help"</b>'
                                       '\nНеобходимые к конфигурации команды помечены звездочкой, остальные по желанию'

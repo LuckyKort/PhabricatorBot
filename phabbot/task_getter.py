@@ -44,20 +44,20 @@ class TaskGetter:
         self.__chat_config['chat_id'] = value
 
     @property
-    def last_new_check(self) -> int:
+    def last_new_check(self) -> dict:
         return self.__chat_config.get('last_new_check')
 
     @last_new_check.setter
-    def last_new_check(self, value: int):
+    def last_new_check(self, value: dict):
         assert value is not None
         self.__chat_config['last_new_check'] = value
 
     @property
-    def last_update_check(self) -> int:
+    def last_update_check(self) -> dict:
         return self.__chat_config.get('last_update_check')
 
     @last_update_check.setter
-    def last_update_check(self, value: int):
+    def last_update_check(self, value: dict):
         assert value is not None
         self.__chat_config['last_update_check'] = value
 
@@ -463,14 +463,23 @@ class TaskGetter:
                 return requests.post(url, params=data, verify=False)
 
             if not self.last_new_check:
-                self.last_new_check = self.__timestamp()
+                self.last_new_check = {}
             if not self.last_update_check:
-                self.last_update_check = self.last_new_check
+                self.last_update_check = {}
+
+            if not self.last_new_check.get(board):
+                self.last_new_check[board] = self.__timestamp()
+            if not self.last_update_check.get(board):
+                self.last_update_check[board] = self.last_new_check[board]
+
+            last_new = self.last_new_check[board]
+            last_update = self.last_update_check[board]
 
             # Проверка последних обновленных задач не может быть раньше проверки новых заданий
-            assert self.last_update_check >= self.last_new_check
-            if self.last_update_check < self.last_new_check:
-                self.last_update_check = self.last_new_check
+            assert last_update >= last_new
+            if last_update < last_new:
+                self.last_update_check[board] = last_new
+                last_update = last_new
 
             # TODO: Идет сброс костыльного счетчика идентификаторов
             self.__new_ids.clear()
@@ -483,10 +492,10 @@ class TaskGetter:
                 "constraints[projects][0]": board
             }
 
-            data.update({"constraints[createdStart]": self.last_new_check})
+            data.update({"constraints[createdStart]": last_new})
             new_r = search()
             data.pop("constraints[createdStart]")
-            data.update({"constraints[modifiedStart]": self.last_update_check})
+            data.update({"constraints[modifiedStart]": last_update})
 
             upd_r = search()
 
@@ -499,7 +508,7 @@ class TaskGetter:
                        "\nNew: {2}" \
                        "\nUpd: {3}" \
                        "\nNewParsed: {4}" \
-                       "\nUpdParsed: {5}".format(self.last_new_check, self.last_update_check, new_r.json(), upd_r.json(),
+                       "\nUpdParsed: {5}".format(last_new, last_update, new_r.json(), upd_r.json(),
                                                  new_parsed, upd_parsed)
             with open('logs.txt', 'a') as file:
                 file.write(log_item)
@@ -510,15 +519,15 @@ class TaskGetter:
             if upd_parsed is not None:
                 if upd_parsed not in self.__sended_ids:
                     self.__sended_ids.append(upd_parsed)
-                    updated_tasks = self.__getupdates(upd_parsed, self.last_update_check)
+                    updated_tasks = self.__getupdates(upd_parsed, last_update)
                     if updated_tasks is not None:
                         self.__send_results(updated_tasks, "upd")
                         updated_tasks_logline = "\nUpdated_tasks: {0}".format(updated_tasks)
                         with open('logs.txt', 'a') as file:
                             file.write(updated_tasks_logline)
 
-            self.last_new_check = TaskGetter.__serverdate_to_timestamp(new_r.headers['date'])
-            self.last_update_check = TaskGetter.__serverdate_to_timestamp(upd_r.headers['date'])
+            self.last_new_check[board] = TaskGetter.__serverdate_to_timestamp(new_r.headers['date'])
+            self.last_update_check[board] = TaskGetter.__serverdate_to_timestamp(upd_r.headers['date'])
             TaskGetter.__config.dump()
         self.__sended_ids.clear()
 
@@ -618,13 +627,12 @@ class TaskGetter:
         else:
             for chat_config in TaskGetter.__config['chats']:
                 schedule_task(chat_config)
-
-        while True:
-            if TaskGetter.__stop_threads:
-                schedule.clear()
-                return
-            schedule.run_pending()
-            time.sleep(1)
+            while True:
+                if TaskGetter.__stop_threads:
+                    schedule.clear()
+                    return
+                schedule.run_pending()
+                time.sleep(1)
 
     @staticmethod
     def main_loop():

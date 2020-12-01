@@ -1,5 +1,6 @@
 import json
 import os.path
+import codecs
 
 
 class Config(dict):
@@ -17,7 +18,7 @@ class Config(dict):
         if not os.path.isfile(path):
             return Config()
 
-        with open(path, 'r') as config:
+        with codecs.open(path, 'r', 'utf-8') as config:
             return Config(**json.load(config), path=path)
 
     def chat(self, chat_id, update=True):
@@ -29,6 +30,15 @@ class Config(dict):
         chats.append(chat)
         update and self.dump()
         return chat
+
+    def name(self, chat_id):
+        chat = self.chat(chat_id, False)
+        return chat.get('name')
+
+    def set_name(self, chat_id, name):
+        chat = self.chat(chat_id, False)
+        chat['name'] = name
+        self.dump()
 
     def active(self, chat_id):
         chat = self.chat(chat_id, False)
@@ -107,5 +117,5 @@ class Config(dict):
         return chat.get('last_update_check')
 
     def dump(self):
-        with open(self.path, 'w') as config:
-            json.dump(self, config, indent=4)
+        with codecs.open(self.path, 'w', encoding='utf-8') as config:
+            json.dump(self, config, indent=4, ensure_ascii=False)
