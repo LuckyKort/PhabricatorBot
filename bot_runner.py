@@ -94,6 +94,16 @@ def checkconfig(chatid):
                                  "настройки или начать мониторинг командой /schedule")
 
 
+def checkconf(chatid):
+    if not config.server(chatid):
+        bot.send_message(chatid, "Для начала работы необходимо ввести адрес сервера. Воспользуйтесь командой /server")
+        return False
+    if not config.phab_api(chatid):
+        bot.send_message(chatid, "Для начала работы необходимо ввести API-токен. Воспользуйтесь командой /phab_api")
+        return False
+    return True
+
+
 def getptojectname(chatid, phids):
     defaultstr = str()
     for phid in phids:
@@ -118,36 +128,37 @@ def getptojectname(chatid, phids):
             result += "<b>%s:</b> %s\n" % (name, phid)
     if len(result) > 0:
         return result
-    return defaultstr
+    return "Список пуст"
 
 
 @bot.message_handler(commands=['project_id'])
 def get_project(message):
-    args = __extract_args(message.text)
-    if args is not None:
-        args = ' '.join(args)
-        url = '{0}/api/project.search'.format(config.server(message.chat.id))
-        data = {
-            "api.token": config.phab_api(message.chat.id),
-            "constraints[name]": args,
-        }
-        r = requests.post(url, params=data, verify=False)
-        result = r.json()
-        if len(result['result']['data']) > 0:
-            resultstr = 'Результат поиска:\n'
-            for i in range(len(result['result']['data'])):
-                if result['result']['data'][i]['fields']['color']['key'] != "disabled":
-                    phid = result['result']['data'][i]['phid']
-                    depth = result['result']['data'][i]['fields']['depth']
-                    pname = (result['result']['data'][i]['fields']['parent']['name']) if depth != 0 else None
-                    name = result['result']['data'][i]['fields']['name']
-                    resultname = ((pname + " - ") if int(depth) > 1 else "") + name
-                    resultstr += "* <b>" + resultname + ":</b> " + phid + "\n"
-            bot.send_message(message.chat.id, resultstr, parse_mode='HTML')
+    if not checkconf(message.chat.id):
+        args = __extract_args(message.text)
+        if args is not None:
+            args = ' '.join(args)
+            url = '{0}/api/project.search'.format(config.server(message.chat.id))
+            data = {
+                "api.token": config.phab_api(message.chat.id),
+                "constraints[name]": args,
+            }
+            r = requests.post(url, params=data, verify=False)
+            result = r.json()
+            if len(result['result']['data']) > 0:
+                resultstr = 'Результат поиска:\n'
+                for i in range(len(result['result']['data'])):
+                    if result['result']['data'][i]['fields']['color']['key'] != "disabled":
+                        phid = result['result']['data'][i]['phid']
+                        depth = result['result']['data'][i]['fields']['depth']
+                        pname = (result['result']['data'][i]['fields']['parent']['name']) if depth != 0 else None
+                        name = result['result']['data'][i]['fields']['name']
+                        resultname = ((pname + " - ") if int(depth) > 1 else "") + name
+                        resultstr += "* <b>" + resultname + ":</b> " + phid + "\n"
+                bot.send_message(message.chat.id, resultstr, parse_mode='HTML')
+            else:
+                bot.send_message(message.chat.id, "Проекты с таким именем не найдены")
         else:
-            bot.send_message(message.chat.id, "Проекты с таким именем не найдены")
-    else:
-        bot.send_message(message.chat.id, "Введите название проекта!")
+            bot.send_message(message.chat.id, "Введите название проекта!")
 
 
 @bot.message_handler(commands=['settings'])

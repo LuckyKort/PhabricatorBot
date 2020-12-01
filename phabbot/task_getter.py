@@ -457,7 +457,7 @@ class TaskGetter:
                                                                                      message['id'])
                 TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML')
 
-    def tasks_search(self):
+    def __tasks_search(self):
         for board in self.boards:
             def search():
                 return requests.post(url, params=data, verify=False)
@@ -521,6 +521,12 @@ class TaskGetter:
             self.last_update_check = TaskGetter.__serverdate_to_timestamp(upd_r.headers['date'])
             TaskGetter.__config.dump()
         self.__sended_ids.clear()
+
+    def tasks_search(self):
+        try:
+            self.__tasks_search()
+        except Exception as e:
+            print(e)
 
     @staticmethod
     def stop():
