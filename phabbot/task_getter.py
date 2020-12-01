@@ -218,14 +218,14 @@ class TaskGetter:
             print('При получении приоритета произошла ошибка: ', e)
             return None
 
-    def __parse_results(self, json_dict, act):
+    def __parse_results(self, json_dict, act, board):
         try:
             if act == "new":
                 new_tasks = {}
                 if len(json_dict['result']['data']) > 0:
                     for i in range(len(json_dict['result']['data'])):
-                        board = self.__getproject(self.boards, "id")['board']
-                        project = self.__getproject(self.boards, "id")['project']
+                        board = self.__getproject(board, "id")['board']
+                        project = self.__getproject(board, "id")['project']
                         task_id = json_dict['result']['data'][i]['id']
                         task_name = json_dict['result']['data'][i]['fields']['name']
                         prior = int(json_dict['result']['data'][i]['fields']['priority']['value'])
@@ -490,8 +490,8 @@ class TaskGetter:
 
             upd_r = search()
 
-            new_parsed = self.__parse_results(new_r.json(), "new")
-            upd_parsed = self.__parse_results(upd_r.json(), "upd")
+            new_parsed = self.__parse_results(new_r.json(), "new", board)
+            upd_parsed = self.__parse_results(upd_r.json(), "upd", board)
 
             log_item = "\n------" \
                        "\nFrom(New): {0}" \
