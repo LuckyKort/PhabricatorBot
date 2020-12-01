@@ -88,31 +88,28 @@ def status(message):
     bot.send_message(message.chat.id, "%s Статус мониторинга: %s" % (emoji, activestr))
 
 
-def checkconfig(chatid):
-    if config.boards(chatid) and config.server(chatid) and config.phab_api(chatid):
-        bot.send_message(chatid, "Бот готов к работе. Можете сконфигурировать остальные "
-                                 "настройки или начать мониторинг командой /schedule")
-
-
-def checkconf(chatid):
-    if not config.server(chatid):
-        bot.send_message(chatid, "Для начала работы необходимо ввести адрес сервера. Воспользуйтесь командой /server")
-        return False
-    if not config.phab_api(chatid):
-        bot.send_message(chatid, "Для начала работы необходимо ввести API-токен. Воспользуйтесь командой /phab_api")
-        return False
-    return True
+def checkconfig(chatid, act):
+    if act == "check":
+        if not config.server(chatid):
+            bot.send_message(chatid, "Для начала работы необходимо ввести адрес сервера. "
+                                     "Воспользуйтесь командой /server")
+            return False
+        if not config.phab_api(chatid):
+            bot.send_message(chatid, "Для начала работы необходимо ввести API-токен. "
+                                     "Воспользуйтесь командой /phab_api")
+            return False
+        return True
+    if act == "add":
+        if config.boards(chatid) and config.server(chatid) and config.phab_api(chatid):
+            bot.send_message(chatid, "Бот готов к работе. Можете сконфигурировать остальные "
+                                     "настройки или начать мониторинг командой /schedule")
 
 
 def getptojectname(chatid, phids):
     defaultstr = str()
     for phid in phids:
         defaultstr += "\n<b>Неизвестен: </b> " + phid
-    if not config.boards(chatid):
-        return defaultstr
-    if not config.server(chatid):
-        return defaultstr
-    if not config.phab_api(chatid):
+    if not checkconfig(chatid, "check"):
         return defaultstr
     result = str()
     for phid in phids:
@@ -133,7 +130,7 @@ def getptojectname(chatid, phids):
 
 @bot.message_handler(commands=['project_id'])
 def get_project(message):
-    if not checkconf(message.chat.id):
+    if checkconfig(message.chat.id, "check"):
         args = __extract_args(message.text)
         if args is not None:
             args = ' '.join(args)
@@ -182,7 +179,7 @@ def server(message):
     args = __extract_args(message.text)
     if args:
         config.set_server(message.chat.id, args[0])
-        checkconfig(message.chat.id)
+        checkconfig(message.chat.id, "add")
     bot.send_message(message.chat.id, "\U0001F3E0 Адрес сервера: %s" % config.server(message.chat.id))
 
 
@@ -191,9 +188,9 @@ def phab_api(message):
     args = __extract_args(message.text)
     if args:
         config.set_phab_api(message.chat.id, args[0])
-        checkconfig(message.chat.id)
         bot.delete_message(message.chat.id, message.message_id)
         bot.send_message(message.chat.id, "API токен установлен, сообщение с токеном удалено")
+        checkconfig(message.chat.id, "add")
     elif config.phab_api(message.chat.id) is not None:
         bot.send_message(message.chat.id, "API токен установлен, но в целях безопасноти отображен не будет")
     else:
@@ -225,8 +222,8 @@ def boards(message):
     args = __extract_args(message.text)
     if args:
         config.set_boards(message.chat.id, args)
-        checkconfig(message.chat.id)
-    bot.send_message(message.chat.id, "\U0001F440 Отслеживаемые борды: \n%s" %
+        checkconfig(message.chat.id, "add")
+        bot.send_message(message.chat.id, "\U0001F440 Отслеживаемые борды: \n%s" %
                      (getptojectname(message.chat.id, config.boards(message.chat.id))) or
                      "Список пуст", parse_mode='HTML')
 
