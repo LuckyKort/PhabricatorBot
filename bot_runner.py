@@ -44,6 +44,7 @@ def help_message(message):
                      '\n/schedule - запустить задачу по поиску задач'
                      '\n/unschedule - приостановить поиск задач'
                      '\n/reset - остановить поиск задач и удалить настройки'
+                     '\n/where_apitoken - инструкция по получению API Token-а'
                      '\n\n<b>Показать текущие настройки:</b>'
                      '\n/settings - отобразить все настройки одним сообщением'
                      '\n/server - отобразить текущий адрес сервера,'
@@ -116,17 +117,19 @@ def checkconfig(chatid, act):
     if act == "check":
         if not config.server(chatid):
             bot.send_message(chatid, "Для начала работы необходимо ввести адрес сервера. "
-                                     "Воспользуйтесь командой /server")
+                                     "Воспользуйтесь командой <b>/server</b>", parse_mode='HTML')
             return False
         if not config.phab_api(chatid):
             bot.send_message(chatid, "Для начала работы необходимо ввести API-токен. "
-                                     "Воспользуйтесь командой /phab_api")
+                                     "Воспользуйтесь командой <b>/phab_api</b>. \n"
+                                     "Чтобы узнать, как получить API Token введите команду <b>/where_apitoken</b>",
+                             parse_mode='HTML')
             return False
         return True
     if act == "add":
         if config.boards(chatid) and config.server(chatid) and config.phab_api(chatid):
             bot.send_message(chatid, "Бот готов к работе. Можете сконфигурировать остальные "
-                                     "настройки или начать мониторинг командой /schedule")
+                                     "настройки или начать мониторинг командой <b>/schedule</b>", parse_mode='HTML')
 
 
 def getptojectname(chatid, act, phids):
@@ -210,6 +213,19 @@ def server(message):
         config.set_server(message.chat.id, args[0])
         checkconfig(message.chat.id, "add")
     bot.send_message(message.chat.id, "\U0001F3E0 Адрес сервера: %s" % config.server(message.chat.id))
+
+
+@bot.message_handler(commands=['where_apitoken'])
+def where_apitoken(message):
+    bot.send_message(message.chat.id, "API-Token можно получить, пройдя по шагам:\n"
+                                      "1. Зайти в <b>Phabricator</b>\n"
+                                      "2. Нажать на свою аваратку в правом верхнем углу экрана\n"
+                                      "3. Выбрать <b>'Settings'</b>\n"
+                                      "4. Внизу нажать <b>'Conduit API Tokens'</b>\n"
+                                      "5. Нажать 'Generate Token' и согласиться, нажав синюю кнопку 'Generate Token'"
+                                      "еще раз\n"
+                                      "6. Скопировать все содержимое отобразившегося токена и "
+                                      "отправить токен с командой /phab_api")
 
 
 @bot.message_handler(commands=['phab_api'])

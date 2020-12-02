@@ -77,7 +77,7 @@ class Config(dict):
 
     def set_boards(self, chat_id, boards: list):
         chat = self.chat(chat_id, False)
-        chat['boards'] = boards
+        chat['boards'].append(boards)
         self.dump()
 
     def ignored_boards(self, chat_id):
@@ -86,7 +86,7 @@ class Config(dict):
 
     def set_ignored_boards(self, chat_id, ignored_boards):
         chat = self.chat(chat_id, False)
-        chat['ignored_boards'] = ignored_boards
+        chat['ignored_boards'].append(ignored_boards)
         self.dump()
 
     def unset_ignored_boards(self, chat_id):
@@ -100,7 +100,7 @@ class Config(dict):
 
     def set_ignored_columns(self, chat_id, ignored_columns):
         chat = self.chat(chat_id, False)
-        chat['ignored_columns'] = ignored_columns
+        chat['ignored_columns'].append(ignored_columns)
         self.dump()
 
     def unset_ignored_columns(self, chat_id):
