@@ -116,6 +116,10 @@ class Config(dict):
         chat = self.chat(chat_id, False)
         return chat.get('last_update_check')
 
+    @property
+    def superusers(self) -> list:
+        return self.get('superusers')
+
     def dump(self):
         with codecs.open(self.path, 'w', encoding='utf-8') as config:
             json.dump(self, config, indent=4, ensure_ascii=False)

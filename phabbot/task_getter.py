@@ -47,6 +47,10 @@ class TaskGetter:
         self.__chat_config['chat_id'] = value
 
     @property
+    def name(self) -> str:
+        return self.__chat_config.get('name') or self.chat_id
+
+    @property
     def last_new_check(self) -> dict:
         return self.__chat_config.get('last_new_check')
 
@@ -359,7 +363,7 @@ class TaskGetter:
         assert (results and len(results))
         if act == "new":
             for result in results.values():
-                print(TaskGetter.__timenow() + ': Для чата ' + str(self.chat_id) +
+                print(TaskGetter.__timenow() + ': Для чата ' + str(self.name) +
                       ' обнаружен новый таск - T' + str(result['task_id']))
                 resultstr = 'На борде <b>{0}</b> появился новый таск ' \
                             'с <b>{1}</b> приоритетом: \n\U0001F4CA <b>{2}</b> \n' \
@@ -384,7 +388,7 @@ class TaskGetter:
                         "\n\U0001F4DD " + body[0].upper() + body[1:]
                     )
                 else:
-                    print(self.__timenow() + ': Для чата ' + str(self.chat_id) +
+                    print(self.__timenow() + ': Для чата ' + str(self.name) +
                           ' обнаружен обновленный таск - T' + result['task_id'])
                     TaskGetter.__bot.send_message(self.chat_id, head + body + footer, parse_mode='HTML')
 

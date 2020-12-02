@@ -3,6 +3,7 @@ import requests
 import telebot
 from phabbot.config import Config
 from phabbot.task_getter import TaskGetter
+from time import strftime, localtime
 
 config = Config.load()
 assert isinstance(config, Config)
@@ -85,6 +86,25 @@ def reset():
     pass
 
 
+@bot.message_handler(commands=['sudo'])
+def sudo(message):
+    if message.chat.id not in config.superusers:
+        bot.send_message(message.chat.id, "Вы не являетесь администратором. Забудьте эту команду =)")
+        return
+    args = __extract_args(message.text)
+    if not args:
+        return
+
+    if args[0] == 'send_message':
+        send_message(' '.join(args[1:]))
+    if args[0] == 'get_board':
+        bot.send_message(message.chat.id, getptojectname(message.chat.id, "phids", args[1:]), parse_mode='HTML')
+
+
+def send_message(message):
+    [bot.send_message(chat['chat_id'], message) for chat in config.get('chats')]
+
+
 @bot.message_handler(commands=['status'])
 def status(message):
     activestr = "Активен" if config.active(message.chat.id) else "Отдыхает"
@@ -109,7 +129,7 @@ def checkconfig(chatid, act):
                                      "настройки или начать мониторинг командой /schedule")
 
 
-def getptojectname(chatid, phids):
+def getptojectname(chatid, act, phids):
     defaultstr = str()
     for phid in phids:
         defaultstr += "\n<b>Неизвестен: </b> " + phid
@@ -125,8 +145,13 @@ def getptojectname(chatid, phids):
         r = requests.post(url, params=data, verify=False)
         json = r.json()
         name = json['result']['data'][0]['fields']['name'] if len(json['result']['data']) else "Неизвестен"
+
         if len(json) > 0:
-            result += "<b>%s:</b> %s\n" % (name, phid)
+            if act == "phids":
+                result += "<b>%s:</b> %s\n" % (name, phid)
+            if act == "ts":
+                time = strftime("%H:%M:%S", localtime(phids[phid]))
+                result += "<b>%s:</b> %s\n" % (name, time)
     if len(result) > 0:
         return result
     return "Список пуст"
@@ -172,8 +197,8 @@ def settings(message):
                       "\n\U0001F648 Колонки, перемещения в которые игнорируются: \n%s\n") % (
                       config.server(message.chat.id) or "Не установлен",
                       config.frequency(message.chat.id) or "2 (Стандартное значение)",
-                      getptojectname(message.chat.id, config.boards(message.chat.id)) or "Список пуст\n",
-                      getptojectname(message.chat.id, config.ignored_boards(message.chat.id)) or "Список пуст\n",
+                      getptojectname(message.chat.id, "phids", config.boards(message.chat.id)) or "Список пуст\n",
+                      getptojectname(message.chat.id, "phids", config.ignored_boards(message.chat.id)) or "Список пуст\n",
                       (', '.join(config.ignored_columns(message.chat.id))) or "Список пуст"
                      ), parse_mode='HTML')
 
@@ -228,7 +253,7 @@ def boards(message):
         config.set_boards(message.chat.id, args)
         checkconfig(message.chat.id, "add")
         bot.send_message(message.chat.id, "\U0001F440 Отслеживаемые борды: \n%s" %
-                     (getptojectname(message.chat.id, config.boards(message.chat.id))) or
+                     (getptojectname(message.chat.id, "phids", config.boards(message.chat.id))) or
                      "Список пуст", parse_mode='HTML')
 
 
@@ -238,7 +263,7 @@ def ignored_boards(message):
     if args:
         config.set_ignored_boards(message.chat.id, args)
     bot.send_message(message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются: \n%s" %
-                     (getptojectname(message.chat.id, config.ignored_boards(message.chat.id)) or "Список пуст\n"),
+                     (getptojectname(message.chat.id, "phids", config.ignored_boards(message.chat.id)) or "Список пуст\n"),
                      parse_mode='HTML')
 
 
@@ -267,10 +292,11 @@ def ignored_boards(message):
 @bot.message_handler(commands=['last_check'])
 def last_check(message):
     bot.send_message(message.chat.id,
-                     "Время последней проверки на наличие новых тасков: %s\n"
-                     "Время последней проверки на наличие обновленных тасков: %s" % (
-                        config.last_new_check(message.chat.id), 
-                        config.last_update_check(message.chat.id)))
+                     "Время последней проверки на наличие новых тасков: \n%s\n"
+                     "Время последней проверки на наличие обновленных тасков: \n%s" % (
+                         getptojectname(message.chat.id, "ts", config.last_new_check(message.chat.id)),
+                         getptojectname(message.chat.id, "ts", config.last_update_check(message.chat.id))),
+                     parse_mode='HTML')
 
 
 if __name__ == '__main__':
