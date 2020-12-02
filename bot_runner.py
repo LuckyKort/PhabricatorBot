@@ -4,12 +4,14 @@ import telebot
 from phabbot.config import Config
 from phabbot.task_getter import TaskGetter
 from time import strftime, localtime
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 config = Config.load()
 assert isinstance(config, Config)
 tg_api = config.get('tg_api')
 assert isinstance(tg_api, str)
 bot = telebot.AsyncTeleBot(tg_api)
+state = None
 
 
 def __extract_args(command_text: str):
@@ -19,17 +21,21 @@ def __extract_args(command_text: str):
     return args
 
 
-@bot.message_handler(commands=['start'])
-def start(message):
+def getname(message):
     title = message.chat.title
     if not title:
         title = r"%s %s (@%s)" % (message.chat.first_name, message.chat.last_name, message.chat.username)
     config.set_name(message.chat.id, title)
+
+
+@bot.message_handler(commands=['start'])
+def start(message):
     bot.send_message(message.chat.id, 'Для начала работы бота вам необходимо сконфигурировать бота.'
-                                      '\nДоступные команды для конфигурации бота описаны в <b>"/help"</b>'
-                                      '\nНеобходимые к конфигурации команды помечены звездочкой, остальные по желанию'
+                                      '\nНеобходимые для конфигурации настройки помечены в главном меню звёздочкой, '
+                                      'остальные настраиваются по желанию'
                                       '\nПосле окончания конфигурации введите <b>"/schedule"</b>, чтобы '
                                       'начать отслеживание', parse_mode="HTML")
+    settings(message)
 
 
 @bot.message_handler(commands=['help'])
@@ -46,7 +52,7 @@ def help_message(message):
                      '\n/reset - остановить поиск задач и удалить настройки'
                      '\n/where_apitoken - инструкция по получению API Token-а'
                      '\n\n<b>Показать текущие настройки:</b>'
-                     '\n/settings - отобразить все настройки одним сообщением'
+                     '\n/main - отобразить главное меню'
                      '\n/server - отобразить текущий адрес сервера,'
                      '\n/phab_api - отобразить текущий токен'
                      '\n/frequency - отобразить текущую частоту обращения к серверу (в минутах)'
@@ -72,9 +78,13 @@ def help_message(message):
 
 @bot.message_handler(commands=['schedule'])
 def schedule(message):
-    bot.send_message(message.chat.id, "\u2705 Мониторинг запущен" if
-                     not config.active(message.chat.id) else "\u26A1 Мониторинг уже запущен")
-    TaskGetter.schedule(message.chat.id)
+    getname(message)
+    if config.server(message.chat.id) and config.phab_api(message.chat.id) and config.boards(message.chat.id):
+        bot.send_message(message.chat.id, "\u2705 Мониторинг запущен" if not config.active(message.chat.id) else
+                         "\u26A1 Мониторинг уже запущен")
+        TaskGetter.schedule(message.chat.id)
+    else:
+        bot.send_message(message.chat.id, "\u26A1 Для начала мониторинга сконфигурируйте бота!")
 
 
 @bot.message_handler(commands=['unschedule'])
@@ -116,12 +126,11 @@ def status(message):
 def checkconfig(chatid, act):
     if act == "check":
         if not config.server(chatid):
-            bot.send_message(chatid, "Для начала работы необходимо ввести адрес сервера. "
-                                     "Воспользуйтесь командой <b>/server</b>", parse_mode='HTML')
+            bot.send_message(chatid, "Для начала работы бота необходимо ввести "
+                                     "адрес сервера в главном меню (/main)", parse_mode='HTML')
             return False
         if not config.phab_api(chatid):
-            bot.send_message(chatid, "Для начала работы необходимо ввести API-токен. "
-                                     "Воспользуйтесь командой <b>/phab_api</b>. \n"
+            bot.send_message(chatid, "Для начала работы бота необходимо ввести API-токен в главном меню (/main). \n"
                                      "Чтобы узнать, как получить API Token введите команду <b>/where_apitoken</b>",
                              parse_mode='HTML')
             return False
@@ -133,31 +142,32 @@ def checkconfig(chatid, act):
 
 
 def getptojectname(chatid, act, phids):
-    defaultstr = str()
-    for phid in phids:
-        defaultstr += "\n<b>Неизвестен: </b> " + phid
-    if not checkconfig(chatid, "check"):
-        return defaultstr
-    result = str()
-    for phid in phids:
-        url = '{0}/api/project.search'.format(config.server(chatid))
-        data = {
-            "api.token": config.phab_api(chatid),
-            "constraints[phids][0]": phid
-        }
-        r = requests.post(url, params=data, verify=False)
-        json = r.json()
-        name = json['result']['data'][0]['fields']['name'] if len(json['result']['data']) else "Неизвестен"
+    if len(phids) > 0:
+        defaultstr = str()
+        for phid in phids:
+            defaultstr += "\n<b>Неизвестен: </b> " + phid
+        if not checkconfig(chatid, "check"):
+            return defaultstr
+        result = str()
+        for phid in phids:
+            url = '{0}/api/project.search'.format(config.server(chatid))
+            data = {
+                "api.token": config.phab_api(chatid),
+                "constraints[phids][0]": phid
+            }
+            r = requests.post(url, params=data, verify=False)
+            json = r.json()
+            name = json['result']['data'][0]['fields']['name'] if len(json['result']['data']) else "Неизвестен"
 
-        if len(json) > 0:
-            if act == "phids":
-                result += "<b>%s:</b> %s\n" % (name, phid)
-            if act == "ts":
-                time = strftime("%H:%M:%S", localtime(phids[phid]))
-                result += "<b>%s:</b> %s\n" % (name, time)
-    if len(result) > 0:
-        return result
-    return "Список пуст"
+            if len(json) > 0:
+                if act == "phids":
+                    result += "<b>%s:</b> %s\n" % (name, phid)
+                if act == "ts":
+                    time = strftime("%H:%M:%S", localtime(phids[phid]))
+                    result += "<b>%s:</b> %s\n" % (name, time)
+        if len(result) > 0:
+            return result
+    return "Список пуст\n"
 
 
 @bot.message_handler(commands=['project_id'])
@@ -190,52 +200,149 @@ def get_project(message):
             bot.send_message(message.chat.id, "Введите название проекта!")
 
 
-@bot.message_handler(commands=['settings'])
+def ignore_markup():
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 2
+    markup.add(InlineKeyboardButton("Игноровать борды", callback_data="ignored_boards"),
+               InlineKeyboardButton("Игноровать колонки", callback_data="ignored_columns"),
+               InlineKeyboardButton("Вернуться в меню", callback_data="back")
+               )
+    return markup
+
+
+def back_markup():
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Вернуться в меню", callback_data="back"))
+    return markup
+
+
+@bot.message_handler(commands=['main'])
 def settings(message):
+
+    markup = InlineKeyboardMarkup()
+    server_star = " *" if not config.server(message.chat.id) else ""
+    api_star = " *" if not config.phab_api(message.chat.id) else ""
+    boards_star = " *" if not config.boards(message.chat.id) else ""
+    markup.add(InlineKeyboardButton("Сервер" + server_star, callback_data="server"),
+               InlineKeyboardButton("API-Токен" + api_star, callback_data="phab_api"),
+               InlineKeyboardButton("Борды" + boards_star, callback_data="boards"),
+               InlineKeyboardButton("Частота опроса", callback_data="frequency"),
+               InlineKeyboardButton("Исключения", callback_data="ignored")
+               )
+
     bot.send_message(message.chat.id,
-                     ("\U0001F3E0 Адрес сервера: %s\n" 
+                     ("<b>Главное меню бота</b>\n\n"
+                      "%s Статус мониторинга: %s\n"
+                      "\n\U0001F3E0 Адрес сервера: %s\n" 
                       "\n\u23F0 Частота опроса сервера (минуты): %s\n" 
                       "\n\U0001F440 Отслеживаемые борды: \n%s" 
                       "\n\U0001F648 Борды, перемещения по которым игнорируются: \n%s" 
-                      "\n\U0001F648 Колонки, перемещения в которые игнорируются: \n%s\n") % (
+                      "\n\U0001F648 Колонки, перемещения в которые игнорируются: \n%s\n"
+                      "\n<b>Выберите, что вы хотите настроить:</b> ") % (
+                      "\u2705" if config.active(message.chat.id) else "\u274C",
+                      "Активен (Остановить: /unschedule)" if config.active(message.chat.id) else
+                      "Отдыхает (Запустить: /schedule)",
                       config.server(message.chat.id) or "Не установлен",
                       config.frequency(message.chat.id) or "2 (Стандартное значение)",
-                      getptojectname(message.chat.id, "phids", config.boards(message.chat.id)) or "Список пуст\n",
-                      getptojectname(message.chat.id, "phids", config.ignored_boards(message.chat.id)) or "Список пуст\n",
+                      getptojectname(message.chat.id, "phids", config.boards(message.chat.id)) or
+                      "Список пуст\n",
+                      getptojectname(message.chat.id, "phids", config.ignored_boards(message.chat.id)) or
+                      "Список пуст\n",
                       (', '.join(config.ignored_columns(message.chat.id))) or "Список пуст"
-                     ), parse_mode='HTML')
+                     ), parse_mode='HTML', reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    global state
+    if call.data == "server":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, 'Введите адрес сервера в формате <b>"https://some.adress"</b>:',
+                         parse_mode='HTML', reply_markup=back_markup())
+        state = "set_server"
+    elif call.data == "phab_api":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, 'Введите ваш API-Token. Чтобы узнать, как его '
+                                               'получить введите /where_apitoken:',
+                         parse_mode='HTML', reply_markup=back_markup())
+        state = "set_phab_api"
+    elif call.data == "boards":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, 'Введите через пробел PHIDы бордов, за которыми хотите наблюдать.\n'
+                                               'PHIDы бордов можно узнать, используя команду \n'
+                                               '<b>"/project_id название борда"</b> (Название не обязательно '
+                                               'вводить точь-в-точь)\n'
+                                               'Так-же, при необходимости вы можете настроить игнорируемые борды, '
+                                               'перемещения по которым отслеживаться не будут. \n'
+                                               'Для настройки нажмите <b>"Исключения"</b> в главном меню',
+                         parse_mode='HTML', reply_markup=back_markup())
+        state = "set_boards"
+    elif call.data == "frequency":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, 'Введите частоту проверки обновлений в минутах:',
+                         parse_mode='HTML', reply_markup=back_markup())
+        state = "set_frequency"
+    elif call.data == "ignored":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, 'Исключения позволяют игнорировать перемещения '
+                                               'в определенных бордах или колонках.\n'
+                                               'Это может быть полезно, в случае если вы подписаны на задачи, но не'
+                                               'хотите получать оповещения о событиях которые происходят, например, '
+                                               'на борде который к вам не относится, но указан в задаче.\n'
+                                               'Например, вы менеджер, и не хотите получать оповещения о движении таска'
+                                               'на борде разработчиков. \nВыберите, что вы хотите игнорировать:',
+                         parse_mode='HTML', reply_markup=ignore_markup())
+    elif call.data == "ignored_boards":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, 'Введите PHIDы бордов, перемещения по которым необходимо игнорировать:',
+                         parse_mode='HTML', reply_markup=back_markup())
+        state = "set_ignored_boards"
+    elif call.data == "ignored_columns":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, 'Введите названия колонок, перемещения '
+                                               'в которые необходимо игнорировать:',
+                         parse_mode='HTML', reply_markup=back_markup())
+        state = "set_ignored_columns"
+    elif call.data == "back":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        settings(call.message)
+        state = None
 
 
 @bot.message_handler(commands=['server'])
-def server(message):
-    args = __extract_args(message.text)
+def server(message, command=True):
+    args = __extract_args(message.text) if command else [message.text]
     if args:
         config.set_server(message.chat.id, args[0])
         checkconfig(message.chat.id, "add")
-    bot.send_message(message.chat.id, "\U0001F3E0 Адрес сервера: %s" % config.server(message.chat.id))
+        bot.answer_callback_query(message.chat.id, "Сервер установлен!")
+        settings(message)
+    else:
+        bot.send_message(message.chat.id, "\U0001F3E0 Адрес сервера: %s" % config.server(message.chat.id))
 
 
 @bot.message_handler(commands=['where_apitoken'])
 def where_apitoken(message):
-    bot.send_message(message.chat.id, "API-Token можно получить, пройдя по шагам:\n"
+    bot.send_message(message.chat.id, "API-Token можно получить, пройдя по шагам:\n\n"
                                       "1. Зайти в <b>Phabricator</b>\n"
                                       "2. Нажать на свою аваратку в правом верхнем углу экрана\n"
                                       "3. Выбрать <b>'Settings'</b>\n"
                                       "4. Внизу нажать <b>'Conduit API Tokens'</b>\n"
-                                      "5. Нажать 'Generate Token' и согласиться, нажав синюю кнопку 'Generate Token'"
-                                      "еще раз\n"
+                                      "5. Нажать <b>'Generate Token'</b> и согласиться, нажав "
+                                      "синюю кнопку <b>'Generate Token'</b> еще раз\n"
                                       "6. Скопировать все содержимое отобразившегося токена и "
-                                      "отправить токен с командой /phab_api")
+                                      "установить токен в главном меню (/main)", parse_mode='HTML')
 
 
 @bot.message_handler(commands=['phab_api'])
-def phab_api(message):
-    args = __extract_args(message.text)
+def phab_api(message, command=True):
+    args = __extract_args(message.text) if command else [message.text]
     if args:
         config.set_phab_api(message.chat.id, args[0])
         bot.delete_message(message.chat.id, message.message_id)
         bot.send_message(message.chat.id, "API токен установлен, сообщение с токеном удалено")
         checkconfig(message.chat.id, "add")
+        settings(message)
     elif config.phab_api(message.chat.id) is not None:
         bot.send_message(message.chat.id, "API токен установлен, но в целях безопасноти отображен не будет")
     else:
@@ -257,30 +364,36 @@ def frequency(message):
         bot.send_message(message.chat.id,
                          "\u23F0 Частота опроса сервера (минуты): %d" % (
                                      config.frequency(message.chat.id) or 2))
+        settings(message)
     else:
         bot.send_message(message.chat.id, "Давайте уважать фабрикатор "
                                           "и не задалбывать его частыми запросами \U0001F609")
 
 
 @bot.message_handler(commands=['boards'])
-def boards(message):
-    args = __extract_args(message.text)
+def boards(message, command=True):
+    args = __extract_args(message.text) if command else message.text.replace('.', '').replace(',', '').split()
     if args:
-        config.set_boards(message.chat.id, args)
+        for i in range(len(args)):
+            config.set_boards(message.chat.id, args[i])
         checkconfig(message.chat.id, "add")
+        settings(message)
+    else:
         bot.send_message(message.chat.id, "\U0001F440 Отслеживаемые борды: \n%s" %
-                     (getptojectname(message.chat.id, "phids", config.boards(message.chat.id))) or
-                     "Список пуст", parse_mode='HTML')
+                         (getptojectname(message.chat.id, "phids", config.boards(message.chat.id))) or
+                         "Список пуст", parse_mode='HTML')
 
 
 @bot.message_handler(commands=['ignored_boards'])
-def ignored_boards(message):
-    args = __extract_args(message.text)
+def ignored_boards(message, command=True):
+    args = __extract_args(message.text) if command else [message.text]
     if args:
         config.set_ignored_boards(message.chat.id, args)
-    bot.send_message(message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются: \n%s" %
-                     (getptojectname(message.chat.id, "phids", config.ignored_boards(message.chat.id)) or "Список пуст\n"),
-                     parse_mode='HTML')
+        settings(message)
+    else:
+        bot.send_message(message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются: \n%s" %
+                         (getptojectname(message.chat.id, "phids", config.ignored_boards(message.chat.id)) or
+                          "Список пуст\n"), parse_mode='HTML')
 
 
 @bot.message_handler(commands=['reset_ignored_boards'])
@@ -290,13 +403,15 @@ def ignored_boards(message):
 
 
 @bot.message_handler(commands=['ignored_columns'])
-def ignored_columns(message):
-    args = __extract_args(message.text)
+def ignored_columns(message, command=True):
+    args = __extract_args(message.text) if command else [message.text]
     if args:
         args = ' '.join(args).split(',')
         config.set_ignored_columns(message.chat.id, args)
-    bot.send_message(message.chat.id, "\U0001F648 Колонки, перемещения в которые игнорируются: \n%s" %
-                     (', '.join(config.ignored_columns(message.chat.id)) or "Список пуст"))
+        settings(message)
+    else:
+        bot.send_message(message.chat.id, "\U0001F648 Колонки, перемещения в которые игнорируются: \n%s" %
+                         (', '.join(config.ignored_columns(message.chat.id)) or "Список пуст"))
 
 
 @bot.message_handler(commands=['reset_ignored_columns'])
@@ -313,6 +428,27 @@ def last_check(message):
                          getptojectname(message.chat.id, "ts", config.last_new_check(message.chat.id)),
                          getptojectname(message.chat.id, "ts", config.last_update_check(message.chat.id))),
                      parse_mode='HTML')
+
+
+@bot.message_handler(func=lambda message: True)
+def setter(message):
+    global state
+    if message.text[:1] == "/":
+        state = None
+        return
+    if state == "set_server":
+        server(message, False)
+    if state == "set_phab_api":
+        phab_api(message, False)
+    if state == "set_boards":
+        boards(message, False)
+    if state == "set_frequency":
+        frequency(message, False)
+    if state == "set_ignored_boards":
+        ignored_boards(message, False)
+    if state == "set_ignored_columns":
+        ignored_columns(message, False)
+    state = None
 
 
 if __name__ == '__main__':

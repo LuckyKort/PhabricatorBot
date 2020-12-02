@@ -568,19 +568,23 @@ class TaskGetter:
     @staticmethod
     def checkconn(config, task_getter):
         if not config.get('server'):
-            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите адрес сервера, "
-                                                               "используя команду /server Адрес в "
-                                                               "формате 'https://server.name' ")
+            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота необходимо ввести "
+                                                               "адрес сервера в главном меню (/main)",
+                                          parse_mode='HTML')
             return False
         if not config.get('phab_api'):
-            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите API-токен, используя "
-                                                               "команду /phab_api Токен")
+            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота необходимо ввести API-токен в "
+                                                               "главном меню (/main).\n"
+                                                               "Чтобы узнать, как получить API Token введите "
+                                                               "команду <b>/where_apitoken</b>", parse_mode='HTML')
             return False
         if not config.get('boards'):
-            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота введите ID бордов которые "
-                                                               "необходимо мониторить, используя команду /boards "
-                                                               "ID1 ID2. \nДля того, чтобы узнать ID борда "
-                                                               "введите команду /project_id Название")
+            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота необходимо ввести PHIDы "
+                                                               "бордов которые необходимо мониторить "
+                                                               "в главном меню (/main) "
+                                                               "\nДля того, чтобы узнать ID борда "
+                                                               "введите команду /project_id Название",
+                                          parse_mode='HTML')
             return False
         try:
             url = config.get('server') + '/api/user.whoami'
@@ -621,6 +625,8 @@ class TaskGetter:
             if TaskGetter.__active_tasks.get(task_getter.chat_id):
                 return
             if not task_getter.checkconn(config, task_getter):
+                chat_config['active'] = False
+                TaskGetter.__config.dump()
                 return
             task_getter.tasks_search()
             TaskGetter.__active_tasks[task_getter.chat_id] = \

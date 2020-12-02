@@ -77,16 +77,22 @@ class Config(dict):
 
     def set_boards(self, chat_id, boards: list):
         chat = self.chat(chat_id, False)
-        chat['boards'].append(boards)
+        if 'boards' not in chat:
+            chat['boards'] = [boards]
+        else:
+            chat['boards'] += [boards]
         self.dump()
 
     def ignored_boards(self, chat_id):
         chat = self.chat(chat_id, False)
         return chat.get('ignored_boards', [])
 
-    def set_ignored_boards(self, chat_id, ignored_boards):
+    def set_ignored_boards(self, chat_id, ignored_boards: list):
         chat = self.chat(chat_id, False)
-        chat['ignored_boards'].append(ignored_boards)
+        if 'ignored_boards' not in chat:
+            chat['ignored_boards'] = [ignored_boards]
+        else:
+            chat['ignored_boards'] += [ignored_boards]
         self.dump()
 
     def unset_ignored_boards(self, chat_id):
@@ -98,9 +104,12 @@ class Config(dict):
         chat = self.chat(chat_id, False)
         return chat.get('ignored_columns', [])
 
-    def set_ignored_columns(self, chat_id, ignored_columns):
+    def set_ignored_columns(self, chat_id, ignored_columns: list):
         chat = self.chat(chat_id, False)
-        chat['ignored_columns'].append(ignored_columns)
+        if 'ignored_columns' not in chat:
+            chat['ignored_columns'] = [ignored_columns]
+        else:
+            chat['ignored_columns'] += [ignored_columns]
         self.dump()
 
     def unset_ignored_columns(self, chat_id):
