@@ -71,6 +71,23 @@ class Config(dict):
         chat['frequency'] = frequency
         self.dump()
 
+    def settings(self, chat_id) -> list:
+        chat = self.chat(chat_id, False)
+        return chat.get('settings', [])
+
+    def add_to_settings(self, chat_id, settings: list):
+        chat = self.chat(chat_id, False)
+        if 'settings' not in chat:
+            chat['settings'] = [settings]
+        else:
+            chat['settings'] += [settings]
+        self.dump()
+
+    def remove_from_settings(self, chat_id, settings: list):
+        chat = self.chat(chat_id, False)
+        chat['settings'].remove(settings)
+        self.dump()
+
     def boards(self, chat_id) -> list:
         chat = self.chat(chat_id, False)
         return chat.get('boards', [])
@@ -79,8 +96,10 @@ class Config(dict):
         chat = self.chat(chat_id, False)
         if 'boards' not in chat:
             chat['boards'] = [boards]
-        else:
+        elif boards not in chat['boards']:
             chat['boards'] += [boards]
+        else:
+            return
         self.dump()
 
     def ignored_boards(self, chat_id):
@@ -91,8 +110,10 @@ class Config(dict):
         chat = self.chat(chat_id, False)
         if 'ignored_boards' not in chat:
             chat['ignored_boards'] = [ignored_boards]
-        else:
+        elif ignored_boards not in chat['ignored_boards']:
             chat['ignored_boards'] += [ignored_boards]
+        else:
+            return
         self.dump()
 
     def unset_ignored_boards(self, chat_id):
@@ -108,8 +129,10 @@ class Config(dict):
         chat = self.chat(chat_id, False)
         if 'ignored_columns' not in chat:
             chat['ignored_columns'] = [ignored_columns]
-        else:
+        elif ignored_columns not in chat['ignored_columns']:
             chat['ignored_columns'] += [ignored_columns]
+        else:
+            return
         self.dump()
 
     def unset_ignored_columns(self, chat_id):

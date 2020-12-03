@@ -90,6 +90,10 @@ class TaskGetter:
     def boards(self) -> list:
         return self.__chat_config.get('boards')
 
+    @property
+    def settings(self) -> list:
+        return self.__chat_config.get('settings', [])
+
     @boards.setter
     def boards(self, value: list):
         assert value is not None
@@ -133,9 +137,10 @@ class TaskGetter:
                 json_dict = r.json()
                 username = json_dict['result']['data'][0]['fields']['username']
                 realname = json_dict['result']['data'][0]['fields']['realName']
-                return {'username': username, 'realname': realname}
+                telegram = json_dict['result']['data'][0]['fields']['custom.Telegram']
+                return {'username': username, 'realname': realname, 'telegram': telegram}
             else:
-                return {'username': "Не определен", 'realname': "Не определен"}
+                return {'username': "Не определен", 'realname': "Не определен", 'telegram': None}
         except Exception as e:
             print('При получении имени пользователя произошла ошибка: ', e)
             return None
@@ -229,28 +234,33 @@ class TaskGetter:
         try:
             if act == "new":
                 new_tasks = {}
-                if len(json_dict['result']['data']) > 0:
-                    for i in range(len(json_dict['result']['data'])):
-                        board = self.__getproject(board, "id")['board']
-                        project = self.__getproject(board, "id")['project']
-                        task_id = json_dict['result']['data'][i]['id']
-                        task_name = json_dict['result']['data'][i]['fields']['name']
-                        prior = int(json_dict['result']['data'][i]['fields']['priority']['value'])
-                        task_prior = TaskGetter.__getpriority(prior)[1]
-                        owner = json_dict['result']['data'][i]['fields']['ownerPHID']
-                        author = json_dict['result']['data'][i]['fields']['authorPHID']
-                        task_owner = self.__whois(owner)['realname']
-                        task_author = self.__whois(author)['realname']
-                        task_summary = {"task_id": task_id,
-                                        "board": board,
-                                        "project": project,
-                                        "name": task_name,
-                                        "priority": task_prior,
-                                        "owner": task_owner,
-                                        "author": task_author
-                                        }
-                        new_tasks[i] = task_summary
-                    return new_tasks
+                if 1 not in self.settings:
+                    if len(json_dict['result']['data']) > 0:
+                        for i in range(len(json_dict['result']['data'])):
+                            board = self.__getproject(board, "id")['board']
+                            project = self.__getproject(board, "id")['project']
+                            task_id = json_dict['result']['data'][i]['id']
+                            task_name = json_dict['result']['data'][i]['fields']['name']
+                            prior = int(json_dict['result']['data'][i]['fields']['priority']['value'])
+                            task_prior = TaskGetter.__getpriority(prior)[1]
+                            owner = json_dict['result']['data'][i]['fields']['ownerPHID']
+                            author = json_dict['result']['data'][i]['fields']['authorPHID']
+                            task_owner = self.__whois(owner)
+                            task_owner_str = task_owner['realname'] + TaskGetter.gentglink(task_owner['telegram'])
+                            task_author = self.__whois(author)
+                            task_author_str = task_author['realname'] + TaskGetter.gentglink(task_author['telegram'])
+                            task_summary = {"task_id": task_id,
+                                            "board": board,
+                                            "project": project,
+                                            "name": task_name,
+                                            "priority": task_prior,
+                                            "owner": task_owner_str,
+                                            "author": task_author_str
+                                            }
+                            new_tasks[i] = task_summary
+                        return new_tasks
+                    else:
+                        return None
                 else:
                     return None
 
@@ -266,6 +276,14 @@ class TaskGetter:
         except Exception as e:
             print('При парсинге результатов произошла ошибка: ', e)
             return None
+
+    @staticmethod
+    def gentglink(tgstr):
+        if tgstr is None:
+            return ""
+        atsymb = "" if tgstr.startswith("@") else "@"
+        telegramstr = " (%s%s)" % (atsymb, tgstr)
+        return telegramstr
 
     def __getupdates(self, ids, task_time):
         try:
@@ -284,70 +302,74 @@ class TaskGetter:
                     for j in range(len(task['result'][curr_id])):
                         if int(task['result'][curr_id][j]['dateCreated']) > task_time:
                             if task['result'][curr_id][j]['transactionType'] == "reassign":
-                                task_id = task['result'][curr_id][j]['taskID']
-                                oldowner = self.__whois(task['result'][curr_id][j]['oldValue'])['realname']
-                                newowner = self.__whois(task['result'][curr_id][j]['newValue'])['realname']
-                                name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
-                                upd_summary[curr_num] = {"action": "reassign",
-                                                         "name": name,
-                                                         "task_id": task_id,
-                                                         "oldowner": oldowner,
-                                                         "newowner": newowner}
-                                curr_num += 1
-
-                            if task['result'][curr_id][j]['transactionType'] == "core:columns":
-                                if task['result'][curr_id][j]['newValue'][0]['boardPHID'] not in self.ignored_boards:
+                                if 3 not in self.settings:
                                     task_id = task['result'][curr_id][j]['taskID']
-                                    new_col = task['result'][curr_id][j]['newValue'][0]['columnPHID']
-                                    column = self.__getcolname(new_col)
+                                    oldowner = self.__whois(task['result'][curr_id][j]['oldValue'])
+                                    oldownerstr = oldowner['realname'] + TaskGetter.gentglink(oldowner['telegram'])
+                                    newowner = self.__whois(task['result'][curr_id][j]['newValue'])
+                                    newownerstr = newowner['realname'] + TaskGetter.gentglink(newowner['telegram'])
                                     name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
-                                    upd_summary[curr_num] = {"action": "move",
+                                    upd_summary[curr_num] = {"action": "reassign",
                                                              "name": name,
                                                              "task_id": task_id,
-                                                             "column": column['column'],
-                                                             "board": column['board'],
-                                                             "project": column['project']}
+                                                             "oldowner": oldownerstr,
+                                                             "newowner": newownerstr}
                                     curr_num += 1
-
+                            if task['result'][curr_id][j]['transactionType'] == "core:columns":
+                                if 2 not in self.settings:
+                                    if task['result'][curr_id][j]['newValue'][0]['boardPHID'] not in self.ignored_boards:
+                                        task_id = task['result'][curr_id][j]['taskID']
+                                        new_col = task['result'][curr_id][j]['newValue'][0]['columnPHID']
+                                        column = self.__getcolname(new_col)
+                                        name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
+                                        upd_summary[curr_num] = {"action": "move",
+                                                                 "name": name,
+                                                                 "task_id": task_id,
+                                                                 "column": column['column'],
+                                                                 "board": column['board'],
+                                                                 "project": column['project']}
+                                        curr_num += 1
                             if task['result'][curr_id][j]['transactionType'] == "priority":
-                                task_id = task['result'][curr_id][j]['taskID']
-                                old_value = int(task['result'][curr_id][j]['oldValue'])
-                                new_value = int(task['result'][curr_id][j]['newValue'])
-                                old_prior = TaskGetter.__getpriority(old_value)[2]
-                                new_prior = TaskGetter.__getpriority(new_value)[2]
-                                name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
-                                subject = "повышен" if old_value < new_value else "понижен"
-                                upd_summary[curr_num] = {"action": "priority",
-                                                         "name": name,
-                                                         "task_id": task_id,
-                                                         "subject": subject,
-                                                         "old_prior": old_prior,
-                                                         "new_prior": new_prior}
-                                curr_num += 1
-
+                                if 4 not in self.settings:
+                                    task_id = task['result'][curr_id][j]['taskID']
+                                    old_value = int(task['result'][curr_id][j]['oldValue'])
+                                    new_value = int(task['result'][curr_id][j]['newValue'])
+                                    old_prior = TaskGetter.__getpriority(old_value)[2]
+                                    new_prior = TaskGetter.__getpriority(new_value)[2]
+                                    name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
+                                    subject = "повышен" if old_value < new_value else "понижен"
+                                    upd_summary[curr_num] = {"action": "priority",
+                                                             "name": name,
+                                                             "task_id": task_id,
+                                                             "subject": subject,
+                                                             "old_prior": old_prior,
+                                                             "new_prior": new_prior}
+                                    curr_num += 1
                             if task['result'][curr_id][j]['transactionType'] == "core:comment":
-                                task_id = task['result'][curr_id][j]['taskID']
-                                name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
-                                if task['result'][curr_id][j]['comments'] is not None:
-                                    replace_attach = re.sub(r'{([\s\S]+?)}', '[Вложение]',
-                                                            task['result'][curr_id][j]['comments'])
-                                    quote_author = re.findall(r'@(.*?)\s', replace_attach)
-                                    linktext = re.findall(r'\[\[.*\|\s(.*?)\]\]', replace_attach)
-                                    replace_links = re.sub(r'\[\[(.*?)\]\]', linktext[0] if len(linktext) > 0 else
-                                                           "ссылка", replace_attach)
-                                    comment = re.sub(r'^(^>).*', 'Цитата\n> : ' +
-                                                                 quote_author[0] if len(quote_author) > 0 else
-                                                                 "Неизвестный" + ' писал:', replace_links)
-                                else:
-                                    comment = "Комментарий удален"
-                                author = self.__whois(task['result'][curr_id][j]['authorPHID'])['realname']
-                                upd_summary[curr_num] = {"action": "comment",
-                                                         "name": name,
-                                                         "task_id": task_id,
-                                                         "comment": comment[0:100] + '...' if
-                                                         (len(comment) > 100) else comment,
-                                                         "author": author}
-                                curr_num += 1
+                                if 5 not in self.settings:
+                                    task_id = task['result'][curr_id][j]['taskID']
+                                    name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
+                                    if task['result'][curr_id][j]['comments'] is not None:
+                                        replace_attach = re.sub(r'{([\s\S]+?)}', '[Вложение]',
+                                                                task['result'][curr_id][j]['comments'])
+                                        quote_author = re.findall(r'@(.*?)\s', replace_attach)
+                                        linktext = re.findall(r'\[\[.*\|\s(.*?)\]\]', replace_attach)
+                                        replace_links = re.sub(r'\[\[(.*?)\]\]', linktext[0] if len(linktext) > 0 else
+                                                               "ссылка", replace_attach)
+                                        comment = re.sub(r'^(^>).*', 'Цитата\n> : ' +
+                                                                     quote_author[0] if len(quote_author) > 0 else
+                                                                     "Неизвестный" + ' писал:', replace_links)
+                                    else:
+                                        comment = "Комментарий удален"
+                                    author = self.__whois(task['result'][curr_id][j]['authorPHID'])
+                                    authorstr = author['realname'] + TaskGetter.gentglink(author['telegram'])
+                                    upd_summary[curr_num] = {"action": "comment",
+                                                             "name": name,
+                                                             "task_id": task_id,
+                                                             "comment": comment[0:100] + '...' if
+                                                             (len(comment) > 100) else comment,
+                                                             "author": authorstr}
+                                    curr_num += 1
 
                 if len(upd_summary) > 0:
                     return upd_summary
@@ -569,19 +591,19 @@ class TaskGetter:
     def checkconn(config, task_getter):
         if not config.get('server'):
             TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота необходимо ввести "
-                                                               "адрес сервера в главном меню (/main)",
+                                                               "адрес сервера в главном меню (/menu)",
                                           parse_mode='HTML')
             return False
         if not config.get('phab_api'):
             TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота необходимо ввести API-токен в "
-                                                               "главном меню (/main).\n"
+                                                               "главном меню (/menu).\n"
                                                                "Чтобы узнать, как получить API Token введите "
                                                                "команду <b>/where_apitoken</b>", parse_mode='HTML')
             return False
         if not config.get('boards'):
             TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота необходимо ввести PHIDы "
                                                                "бордов которые необходимо мониторить "
-                                                               "в главном меню (/main) "
+                                                               "в главном меню (/menu) "
                                                                "\nДля того, чтобы узнать ID борда "
                                                                "введите команду /project_id Название",
                                           parse_mode='HTML')

@@ -1,6 +1,7 @@
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import requests
 import telebot
+import ast
 from phabbot.config import Config
 from phabbot.task_getter import TaskGetter
 from time import strftime, localtime
@@ -35,7 +36,7 @@ def start(message):
                                       'остальные настраиваются по желанию'
                                       '\nПосле окончания конфигурации введите <b>"/schedule"</b>, чтобы '
                                       'начать отслеживание', parse_mode="HTML")
-    settings(message)
+    menu(message)
 
 
 @bot.message_handler(commands=['help'])
@@ -52,7 +53,7 @@ def help_message(message):
                      '\n/reset - остановить поиск задач и удалить настройки'
                      '\n/where_apitoken - инструкция по получению API Token-а'
                      '\n\n<b>Показать текущие настройки:</b>'
-                     '\n/main - отобразить главное меню'
+                     '\n/menu - отобразить главное меню'
                      '\n/server - отобразить текущий адрес сервера,'
                      '\n/phab_api - отобразить текущий токен'
                      '\n/frequency - отобразить текущую частоту обращения к серверу (в минутах)'
@@ -99,7 +100,7 @@ def reset():
 
 @bot.message_handler(commands=['sudo'])
 def sudo(message):
-    if message.chat.id not in config.superusers:
+    if message.from_user.id not in config.superusers:
         bot.send_message(message.chat.id, "Вы не являетесь администратором. Забудьте эту команду =)")
         return
     args = __extract_args(message.text)
@@ -110,10 +111,21 @@ def sudo(message):
         send_message(' '.join(args[1:]))
     if args[0] == 'get_board':
         bot.send_message(message.chat.id, getptojectname(message.chat.id, "phids", args[1:]), parse_mode='HTML')
+    if args[0] == 'users':
+        get_users(message)
 
 
 def send_message(message):
     [bot.send_message(chat['chat_id'], message) for chat in config.get('chats')]
+
+
+def get_users(message):
+    userslist = "<b>Список пользователей:</b>\n"
+    count = 0
+    for chat in config.get('chats'):
+        count += 1
+        userslist += "<b>%s</b>: %s\n" % (count, chat.get('name') or chat['chat_id'])
+    bot.send_message(message.chat.id, userslist, parse_mode='HTML')
 
 
 @bot.message_handler(commands=['status'])
@@ -127,10 +139,10 @@ def checkconfig(chatid, act):
     if act == "check":
         if not config.server(chatid):
             bot.send_message(chatid, "Для начала работы бота необходимо ввести "
-                                     "адрес сервера в главном меню (/main)", parse_mode='HTML')
+                                     "адрес сервера в главном меню (/menu)", parse_mode='HTML')
             return False
         if not config.phab_api(chatid):
-            bot.send_message(chatid, "Для начала работы бота необходимо ввести API-токен в главном меню (/main). \n"
+            bot.send_message(chatid, "Для начала работы бота необходимо ввести API-токен в главном меню (/menu). \n"
                                      "Чтобы узнать, как получить API Token введите команду <b>/where_apitoken</b>",
                              parse_mode='HTML')
             return False
@@ -142,10 +154,10 @@ def checkconfig(chatid, act):
 
 
 def getptojectname(chatid, act, phids):
-    if len(phids) > 0:
+    if phids and len(phids) > 0:
         defaultstr = str()
         for phid in phids:
-            defaultstr += "\n<b>Неизвестен: </b> " + phid
+            defaultstr += "\n*Неизвестен: * `" + phid + "`"
         if not checkconfig(chatid, "check"):
             return defaultstr
         result = str()
@@ -161,10 +173,10 @@ def getptojectname(chatid, act, phids):
 
             if len(json) > 0:
                 if act == "phids":
-                    result += "<b>%s:</b> %s\n" % (name, phid)
+                    result += "*%s:* `%s`\n" % (name, phid)
                 if act == "ts":
                     time = strftime("%H:%M:%S", localtime(phids[phid]))
-                    result += "<b>%s:</b> %s\n" % (name, time)
+                    result += "*%s:* %s\n" % (name, time)
         if len(result) > 0:
             return result
     return "Список пуст\n"
@@ -191,9 +203,9 @@ def get_project(message):
                         depth = result['result']['data'][i]['fields']['depth']
                         pname = (result['result']['data'][i]['fields']['parent']['name']) if depth != 0 else None
                         name = result['result']['data'][i]['fields']['name']
-                        resultname = ((pname + " - ") if int(depth) > 1 else "") + name
-                        resultstr += "* <b>" + resultname + ":</b> " + phid + "\n"
-                bot.send_message(message.chat.id, resultstr, parse_mode='HTML')
+                        resultname = ((pname + " - ") if int(depth) >= 1 else "") + name
+                        resultstr += "*" + resultname + ":* `" + phid + "`\n"
+                bot.send_message(message.chat.id, resultstr, parse_mode='Markdown')
             else:
                 bot.send_message(message.chat.id, "Проекты с таким именем не найдены")
         else:
@@ -216,8 +228,8 @@ def back_markup():
     return markup
 
 
-@bot.message_handler(commands=['main'])
-def settings(message):
+@bot.message_handler(commands=['menu'])
+def menu(message):
 
     markup = InlineKeyboardMarkup()
     server_star = " *" if not config.server(message.chat.id) else ""
@@ -227,18 +239,22 @@ def settings(message):
                InlineKeyboardButton("API-Токен" + api_star, callback_data="phab_api"),
                InlineKeyboardButton("Борды" + boards_star, callback_data="boards"),
                InlineKeyboardButton("Частота опроса", callback_data="frequency"),
-               InlineKeyboardButton("Исключения", callback_data="ignored")
+               InlineKeyboardButton("Исключения", callback_data="ignored"),
+               InlineKeyboardButton("Настройки", callback_data="settings")
                )
 
     bot.send_message(message.chat.id,
-                     ("<b>Главное меню бота</b>\n\n"
+                     ("*Главное меню бота*\n\n"
                       "%s Статус мониторинга: %s\n"
                       "\n\U0001F3E0 Адрес сервера: %s\n" 
                       "\n\u23F0 Частота опроса сервера (минуты): %s\n" 
                       "\n\U0001F440 Отслеживаемые борды: \n%s" 
                       "\n\U0001F648 Борды, перемещения по которым игнорируются: \n%s" 
                       "\n\U0001F648 Колонки, перемещения в которые игнорируются: \n%s\n"
-                      "\n<b>Выберите, что вы хотите настроить:</b> ") % (
+                      "\nВ меню *\"Исключения\"* вы можете настроить игнорирование "
+                      "перемещений по определенным бордам или колонкам\n"
+                      "\nВ меню *\"Настройки\"* вы можете выбрать уведомления каких типов хотите получать\n"
+                      "\n*Выберите, что вы хотите настроить:* ") % (
                       "\u2705" if config.active(message.chat.id) else "\u274C",
                       "Активен (Остановить: /unschedule)" if config.active(message.chat.id) else
                       "Отдыхает (Запустить: /schedule)",
@@ -249,12 +265,16 @@ def settings(message):
                       getptojectname(message.chat.id, "phids", config.ignored_boards(message.chat.id)) or
                       "Список пуст\n",
                       (', '.join(config.ignored_columns(message.chat.id))) or "Список пуст"
-                     ), parse_mode='HTML', reply_markup=markup)
+                     ), parse_mode='Markdown', reply_markup=markup)
 
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     global state
+    try:
+        callback = ast.literal_eval(call.data)
+    except:
+        callback = None
     if call.data == "server":
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, 'Введите адрес сервера в формате <b>"https://some.adress"</b>:',
@@ -303,10 +323,17 @@ def callback_query(call):
                                                'в которые необходимо игнорировать:',
                          parse_mode='HTML', reply_markup=back_markup())
         state = "set_ignored_columns"
-    elif call.data == "back":
+    elif call.data == "settings":
         bot.delete_message(call.message.chat.id, call.message.message_id)
         settings(call.message)
+    elif call.data == "back":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        menu(call.message)
         state = None
+    elif callback[0] == "settings":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        set_settings(call.message, callback[1])
+        settings(call.message)
 
 
 @bot.message_handler(commands=['server'])
@@ -316,9 +343,44 @@ def server(message, command=True):
         config.set_server(message.chat.id, args[0])
         checkconfig(message.chat.id, "add")
         bot.answer_callback_query(message.chat.id, "Сервер установлен!")
-        settings(message)
+        menu(message)
     else:
         bot.send_message(message.chat.id, "\U0001F3E0 Адрес сервера: %s" % config.server(message.chat.id))
+
+
+def settings(message):
+
+    newtask_emoji = "\u2705" if 1 not in config.settings(message.chat.id) else "\u274C"
+    column_emoji = "\u2705" if 2 not in config.settings(message.chat.id) else "\u274C"
+    assign_emoji = "\u2705" if 3 not in config.settings(message.chat.id) else "\u274C"
+    prior_emoji = "\u2705" if 4 not in config.settings(message.chat.id) else "\u274C"
+    comm_emoji = "\u2705" if 5 not in config.settings(message.chat.id) else "\u274C"
+
+    settings_markup = InlineKeyboardMarkup()
+    settings_markup.row_width = 1
+    settings_markup.add(InlineKeyboardButton(newtask_emoji + " Новые таски",
+                                             callback_data='["settings", 1]'),
+                        InlineKeyboardButton(column_emoji + " Перемещения по колонкам",
+                                             callback_data='["settings", 2]'),
+                        InlineKeyboardButton(assign_emoji + " Изменение исполнителя",
+                                             callback_data='["settings", 3]'),
+                        InlineKeyboardButton(prior_emoji + " Изменение приоритета",
+                                             callback_data='["settings", 4]'),
+                        InlineKeyboardButton(comm_emoji + " Новые комментарии",
+                                             callback_data='["settings", 5]'),
+                        InlineKeyboardButton("Вернуться в главное меню",
+                                             callback_data="back")
+                        )
+
+    bot.send_message(message.chat.id, "Это ваши текущие настройки уведомлений. Нажмите, чтобы переключить состояние.",
+                     reply_markup=settings_markup)
+
+
+def set_settings(message, setting):
+    if setting in config.settings(message.chat.id):
+        config.remove_from_settings(message.chat.id, setting)
+    else:
+        config.add_to_settings(message.chat.id, setting)
 
 
 @bot.message_handler(commands=['where_apitoken'])
@@ -331,7 +393,7 @@ def where_apitoken(message):
                                       "5. Нажать <b>'Generate Token'</b> и согласиться, нажав "
                                       "синюю кнопку <b>'Generate Token'</b> еще раз\n"
                                       "6. Скопировать все содержимое отобразившегося токена и "
-                                      "установить токен в главном меню (/main)", parse_mode='HTML')
+                                      "установить токен в главном меню (/menu)", parse_mode='HTML')
 
 
 @bot.message_handler(commands=['phab_api'])
@@ -342,7 +404,7 @@ def phab_api(message, command=True):
         bot.delete_message(message.chat.id, message.message_id)
         bot.send_message(message.chat.id, "API токен установлен, сообщение с токеном удалено")
         checkconfig(message.chat.id, "add")
-        settings(message)
+        menu(message)
     elif config.phab_api(message.chat.id) is not None:
         bot.send_message(message.chat.id, "API токен установлен, но в целях безопасноти отображен не будет")
     else:
@@ -350,8 +412,8 @@ def phab_api(message, command=True):
 
 
 @bot.message_handler(commands=['frequency'])
-def frequency(message):
-    args = __extract_args(message.text)
+def frequency(message, command=True):
+    args = __extract_args(message.text) if command else [message.text]
     if not args:
         bot.send_message(message.chat.id,
                          "\u23F0 Частота опроса сервера (минуты): %d" % (config.frequency(message.chat.id) or 2))
@@ -364,7 +426,7 @@ def frequency(message):
         bot.send_message(message.chat.id,
                          "\u23F0 Частота опроса сервера (минуты): %d" % (
                                      config.frequency(message.chat.id) or 2))
-        settings(message)
+        menu(message)
     else:
         bot.send_message(message.chat.id, "Давайте уважать фабрикатор "
                                           "и не задалбывать его частыми запросами \U0001F609")
@@ -377,45 +439,45 @@ def boards(message, command=True):
         for i in range(len(args)):
             config.set_boards(message.chat.id, args[i])
         checkconfig(message.chat.id, "add")
-        settings(message)
+        menu(message)
     else:
         bot.send_message(message.chat.id, "\U0001F440 Отслеживаемые борды: \n%s" %
                          (getptojectname(message.chat.id, "phids", config.boards(message.chat.id))) or
-                         "Список пуст", parse_mode='HTML')
+                         "Список пуст", parse_mode='Markdown')
 
 
 @bot.message_handler(commands=['ignored_boards'])
 def ignored_boards(message, command=True):
-    args = __extract_args(message.text) if command else [message.text]
+    args = __extract_args(message.text) if command else message.text
     if args:
         config.set_ignored_boards(message.chat.id, args)
-        settings(message)
+        menu(message)
     else:
         bot.send_message(message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются: \n%s" %
                          (getptojectname(message.chat.id, "phids", config.ignored_boards(message.chat.id)) or
-                          "Список пуст\n"), parse_mode='HTML')
+                          "Список пуст\n"), parse_mode='Markdown')
 
 
 @bot.message_handler(commands=['reset_ignored_boards'])
-def ignored_boards(message):
+def reset_ignored_boards(message):
     config.unset_ignored_boards(message.chat.id)
     bot.send_message(message.chat.id, "\u2705 Игнорируемые борды сброшены")
 
 
 @bot.message_handler(commands=['ignored_columns'])
 def ignored_columns(message, command=True):
-    args = __extract_args(message.text) if command else [message.text]
+    args = __extract_args(message.text) if command else message.text
     if args:
         args = ' '.join(args).split(',')
         config.set_ignored_columns(message.chat.id, args)
-        settings(message)
+        menu(message)
     else:
         bot.send_message(message.chat.id, "\U0001F648 Колонки, перемещения в которые игнорируются: \n%s" %
                          (', '.join(config.ignored_columns(message.chat.id)) or "Список пуст"))
 
 
 @bot.message_handler(commands=['reset_ignored_columns'])
-def ignored_boards(message):
+def reset_ignored_columns(message):
     config.unset_ignored_columns(message.chat.id)
     bot.send_message(message.chat.id, "\u2705 Игнорируемые колонки сброшены")
 
@@ -427,7 +489,7 @@ def last_check(message):
                      "Время последней проверки на наличие обновленных тасков: \n%s" % (
                          getptojectname(message.chat.id, "ts", config.last_new_check(message.chat.id)),
                          getptojectname(message.chat.id, "ts", config.last_update_check(message.chat.id))),
-                     parse_mode='HTML')
+                     parse_mode='Markdown')
 
 
 @bot.message_handler(func=lambda message: True)
