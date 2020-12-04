@@ -42,11 +42,11 @@ class Config(dict):
 
     def active(self, chat_id):
         chat = self.chat(chat_id, False)
-        return bool(chat.get('active'))
+        return bool(chat.get('active', False))
 
     def server(self, chat_id):
         chat = self.chat(chat_id, False)
-        return chat.get('server')
+        return self.get('server')
 
     def set_server(self, chat_id, server):
         chat = self.chat(chat_id, False)

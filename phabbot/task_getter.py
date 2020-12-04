@@ -30,7 +30,7 @@ class TaskGetter:
 
     @property
     def server(self) -> str:
-        return self.__chat_config.get('server')
+        return TaskGetter.__config.get('server') or self.__chat_config.get('server')
 
     @server.setter
     def server(self, value: str):
@@ -588,56 +588,6 @@ class TaskGetter:
         TaskGetter.__bot.send_message(chat_id, "\u2705 Мониторинг приостановлен")
 
     @staticmethod
-    def checkconn(config, task_getter):
-        if not config.get('server'):
-            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота необходимо ввести "
-                                                               "адрес сервера в главном меню (/menu)",
-                                          parse_mode='HTML')
-            return False
-        if not config.get('phab_api'):
-            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота необходимо ввести API-токен в "
-                                                               "главном меню (/menu).\n"
-                                                               "Чтобы узнать, как получить API Token введите "
-                                                               "команду <b>/where_apitoken</b>", parse_mode='HTML')
-            return False
-        if not config.get('boards'):
-            TaskGetter.__bot.send_message(task_getter.chat_id, "Для начала работы бота необходимо ввести PHIDы "
-                                                               "бордов которые необходимо мониторить "
-                                                               "в главном меню (/menu) "
-                                                               "\nДля того, чтобы узнать ID борда "
-                                                               "введите команду /project_id Название",
-                                          parse_mode='HTML')
-            return False
-        try:
-            url = config.get('server') + '/api/user.whoami'
-            data = {
-                "api.token": config.get('phab_api')
-            }
-            result = requests.post(url, params=data, allow_redirects=False, verify=False)
-            if not result:
-                TaskGetter.__bot.send_message(task_getter.chat_id,
-                                              "Проверьте правильность указания адреса фабрикатора")
-                return False
-            if result.headers['Content-Type'] != 'application/json':
-                TaskGetter.__bot.send_message(task_getter.chat_id,
-                                              "Проверьте правильность указания адреса фабрикатора")
-                return False
-            json = result.json()
-            if json['error_code'] == 'ERR-INVALID-AUTH':
-                err = json['error_info']
-                TaskGetter.__bot.send_message(task_getter.chat_id, "Произошла ошибка: " + err)
-                return False
-            return True
-        except requests.exceptions.ConnectionError:
-            TaskGetter.__bot.send_message(task_getter.chat_id,
-                                          "Проверьте правильность введенного адреса сервера")
-            return False
-        except Exception as e:
-            TaskGetter.__bot.send_message(task_getter.chat_id,
-                                          "При попытке подключиться к серверу произошла ошибка: " + str(e))
-            return False
-
-    @staticmethod
     def schedule(chat_id: int or None = None):
         def schedule_task(config):
             if not config.get('active'):
@@ -646,16 +596,14 @@ class TaskGetter:
             assert task_getter.chat_id is not None
             if TaskGetter.__active_tasks.get(task_getter.chat_id):
                 return
-            if not task_getter.checkconn(config, task_getter):
-                chat_config['active'] = False
-                TaskGetter.__config.dump()
-                return
             task_getter.tasks_search()
             TaskGetter.__active_tasks[task_getter.chat_id] = \
                 schedule.every(task_getter.frequency or 2).minutes.do(task_getter.tasks_search)
 
         if chat_id is not None:
             chat_config = TaskGetter.__config.chat(chat_id)
+            TaskGetter.__bot.send_message(chat_config.get('chat_id'), "\u2705 Мониторинг запущен"
+                                          if not chat_config.get('active') else "\u26A1 Мониторинг уже запущен")
             chat_config['active'] = True
             TaskGetter.__config.dump()
             schedule_task(TaskGetter.__config.chat(chat_id))
