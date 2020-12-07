@@ -98,10 +98,23 @@ def sudo(message):
         bot.send_message(message.chat.id, getptojectname(message.chat.id, "phids", args[1:]), parse_mode='HTML')
     if args[0] == 'users':
         get_users(message)
+    if args[0] == 'checknow':
+        TaskGetter.schedule(message.chat.id, sudo=True)
+    if args[0] == 'send_message_anons':
+        send_message_anons(' '.join(args[1:]), message.chat.id)
 
 
 def send_message(message):
     [bot.send_message(chat['chat_id'], message) for chat in config.get('chats')]
+
+
+def send_message_anons(message, chat_id):
+    count = 0
+    for chat in config.get('chats'):
+        if not chat.get('name'):
+            bot.send_message(chat['chat_id'], message)
+            count += 1
+    bot.send_message(chat_id, "Сообщение *%s* отправлено %s людям" % (message, count), parse_mode='Markdown')
 
 
 def get_users(message):
@@ -397,6 +410,10 @@ def settings(message):
     assign_emoji = "\u2705" if 3 not in config.settings(message.chat.id) else "\u274C"
     prior_emoji = "\u2705" if 4 not in config.settings(message.chat.id) else "\u274C"
     comm_emoji = "\u2705" if 5 not in config.settings(message.chat.id) else "\u274C"
+    status_emoji = "\u2705" if 6 not in config.settings(message.chat.id) else "\u274C"
+    tags_emoji = "\u2705" if 7 not in config.settings(message.chat.id) else "\u274C"
+    cmit_emoji = "\u2705" if 8 not in config.settings(message.chat.id) else "\u274C"
+    linked_emoji = "\u2705" if 9 not in config.settings(message.chat.id) else "\u274C"
 
     settings_markup = InlineKeyboardMarkup()
     settings_markup.row_width = 1
@@ -408,8 +425,16 @@ def settings(message):
                                              callback_data='["settings", 3]'),
                         InlineKeyboardButton(prior_emoji + " Изменение приоритета",
                                              callback_data='["settings", 4]'),
+                        InlineKeyboardButton(status_emoji + " Изменение статуса",
+                                             callback_data='["settings", 6]'),
+                        InlineKeyboardButton(tags_emoji + " Изменение тегов",
+                                             callback_data='["settings", 7]'),
                         InlineKeyboardButton(comm_emoji + " Новые комментарии",
                                              callback_data='["settings", 5]'),
+                        InlineKeyboardButton(cmit_emoji + " Новые коммиты",
+                                             callback_data='["settings", 8]'),
+                        InlineKeyboardButton(linked_emoji + " Связанные задачи",
+                                             callback_data='["settings", 9]'),
                         InlineKeyboardButton("Вернуться в главное меню",
                                              callback_data="back")
                         )

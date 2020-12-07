@@ -145,18 +145,23 @@ class TaskGetter:
             print('При получении имени пользователя произошла ошибка: ', e)
             return None
 
-    def __gettaskname(self, task_id):
+    def __gettaskname(self, task_id, act):
         try:
             if task_id is not None:
+                constraint = {
+                    'phid': "constraints[phids][0]"
+                }.get(act, "constraints[ids][0]")
+
                 url = '{0}/api/maniphest.search'.format(self.server)
                 data = {
                     "api.token": self.phab_api,
-                    "constraints[ids][0]": task_id,
+                    constraint: task_id,
                 }
                 r = requests.post(url, params=data, verify=False)
                 json_dict = r.json()
                 task_name = json_dict['result']['data'][0]['fields']['name']
-                return task_name
+                task_id = json_dict['result']['data'][0]['id']
+                return {"name": task_name, "id": task_id}
             else:
                 return "Неизвестен"
         except Exception as e:
@@ -212,6 +217,30 @@ class TaskGetter:
             return {'board': phboard, 'project': phproject}
         except Exception as e:
             print('При получении имени проекта произошла ошибка: ', e)
+            return None
+
+    def __getcommit(self, commit_id):
+        if commit_id is None:
+            return "Неизвестен"
+        url = '{0}/api/diffusion.commit.search'.format(self.server)
+        try:
+            data = {
+                "api.token": self.phab_api,
+                "constraints[phids][0]": commit_id
+            }
+
+            comm_r = requests.post(url, params=data, verify=False)
+            json_dict = comm_r.json()
+            author = None
+            message = None
+            if len(json_dict['result']['data']) > 0:
+                authorphid = json_dict['result']['data'][0]['fields']['author']['userPHID']
+                author = self.__whois(authorphid)
+                messagetext = json_dict['result']['data'][0]['fields']['message']
+                message = messagetext[0:30] + '...' if (len(messagetext) > 100) else messagetext
+            return {"author": author, "message": message}
+        except Exception as e:
+            print('При получении коммита произошла ошибка: ', e)
             return None
 
     @staticmethod
@@ -281,8 +310,11 @@ class TaskGetter:
     def gentglink(tgstr):
         if tgstr is None:
             return ""
-        atsymb = "" if tgstr.startswith("@") else "@"
-        telegramstr = " (%s%s)" % (atsymb, tgstr)
+        if tgstr.endswith("/"):
+            tgstr = tgstr[0:-1]
+        remove_tme = re.split(r'/', tgstr)[-1]
+        atsymb = "" if remove_tme.startswith("@") else "@"
+        telegramstr = " (%s%s)" % (atsymb, remove_tme)
         return telegramstr
 
     def __getupdates(self, ids, task_time):
@@ -301,6 +333,7 @@ class TaskGetter:
                     curr_id = str(ids[i])
                     for j in range(len(task['result'][curr_id])):
                         if int(task['result'][curr_id][j]['dateCreated']) > task_time:
+                            name = self.__gettaskname(task['result'][curr_id][j]['taskID'], "id")
                             if task['result'][curr_id][j]['transactionType'] == "reassign":
                                 if 3 not in self.settings:
                                     task_id = task['result'][curr_id][j]['taskID']
@@ -308,9 +341,8 @@ class TaskGetter:
                                     oldownerstr = oldowner['realname'] + TaskGetter.gentglink(oldowner['telegram'])
                                     newowner = self.__whois(task['result'][curr_id][j]['newValue'])
                                     newownerstr = newowner['realname'] + TaskGetter.gentglink(newowner['telegram'])
-                                    name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
                                     upd_summary[curr_num] = {"action": "reassign",
-                                                             "name": name,
+                                                             "name": name['name'],
                                                              "task_id": task_id,
                                                              "oldowner": oldownerstr,
                                                              "newowner": newownerstr}
@@ -321,9 +353,8 @@ class TaskGetter:
                                         task_id = task['result'][curr_id][j]['taskID']
                                         new_col = task['result'][curr_id][j]['newValue'][0]['columnPHID']
                                         column = self.__getcolname(new_col)
-                                        name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
                                         upd_summary[curr_num] = {"action": "move",
-                                                                 "name": name,
+                                                                 "name": name['name'],
                                                                  "task_id": task_id,
                                                                  "column": column['column'],
                                                                  "board": column['board'],
@@ -336,10 +367,9 @@ class TaskGetter:
                                     new_value = int(task['result'][curr_id][j]['newValue'])
                                     old_prior = TaskGetter.__getpriority(old_value)[2]
                                     new_prior = TaskGetter.__getpriority(new_value)[2]
-                                    name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
                                     subject = "повышен" if old_value < new_value else "понижен"
                                     upd_summary[curr_num] = {"action": "priority",
-                                                             "name": name,
+                                                             "name": name['name'],
                                                              "task_id": task_id,
                                                              "subject": subject,
                                                              "old_prior": old_prior,
@@ -348,7 +378,6 @@ class TaskGetter:
                             if task['result'][curr_id][j]['transactionType'] == "core:comment":
                                 if 5 not in self.settings:
                                     task_id = task['result'][curr_id][j]['taskID']
-                                    name = self.__gettaskname(task['result'][curr_id][j]['taskID'])
                                     if task['result'][curr_id][j]['comments'] is not None:
                                         replace_attach = re.sub(r'{([\s\S]+?)}', '[Вложение]',
                                                                 task['result'][curr_id][j]['comments'])
@@ -364,13 +393,94 @@ class TaskGetter:
                                     author = self.__whois(task['result'][curr_id][j]['authorPHID'])
                                     authorstr = author['realname'] + TaskGetter.gentglink(author['telegram'])
                                     upd_summary[curr_num] = {"action": "comment",
-                                                             "name": name,
+                                                             "name": name['name'],
                                                              "task_id": task_id,
                                                              "comment": comment[0:100] + '...' if
                                                              (len(comment) > 100) else comment,
                                                              "author": authorstr}
                                     curr_num += 1
-
+                            if task['result'][curr_id][j]['transactionType'] == "status":
+                                if 6 not in self.settings:
+                                    task_id = task['result'][curr_id][j]['taskID']
+                                    author = task['result'][curr_id][j]['authorPHID']
+                                    old_value = task['result'][curr_id][j]['oldValue']
+                                    new_value = task['result'][curr_id][j]['newValue']
+                                    closed_statuses = ["invalid", "resolved", "wontfix", "spite"]
+                                    rus_stat = {"open": "Открыт",
+                                                "resolved": "Решен",
+                                                "wontfix": "Wontfix",
+                                                "invalid": "Некорректен",
+                                                "spite": "Spite",
+                                                "analytics": "Аналитика",
+                                                "testing": "Тестирование",
+                                                "todo": "TODO",
+                                                "verified": "Верифицирован",
+                                                "projecting": "Проектирование",
+                                                "in progress": "В работе",
+                                                "stalled": "Затянут",
+                                                "complete": "Завершен"
+                                                }
+                                    upd_summary[curr_num] = {"action": "status",
+                                                             "author": author,
+                                                             "name": name['name'],
+                                                             "task_id": task_id,
+                                                             "old_value": old_value,
+                                                             "new_value": new_value,
+                                                             "closed_statuses": closed_statuses,
+                                                             "rus_old_value": rus_stat.get(old_value, "Неопределенный"),
+                                                             "rus_new_value": rus_stat.get(new_value, "Неопределенный")
+                                                             }
+                                    curr_num += 1
+                            if task['result'][curr_id][j]['transactionType'] == "core:edge":
+                                    task_id = task['result'][curr_id][j]['taskID']
+                                    new_values = task['result'][curr_id][j]['newValue']
+                                    old_values = task['result'][curr_id][j]['oldValue']
+                                    added = list()
+                                    removed = list()
+                                    subaction = None
+                                    for value in new_values:
+                                        if 7 not in self.settings:
+                                            if value.split("-")[1] == "PROJ":
+                                                subaction = "proj"
+                                                board = self.__getproject(value, "id")
+                                                added.append("<b>%s%s</b>" % (board['project'] + " - " if
+                                                                              board['project'] is not None
+                                                                              else "", board['board']))
+                                        if 8 not in self.settings:
+                                            if value.split("-")[1] == "CMIT":
+                                                subaction = "cmit"
+                                                commit = self.__getcommit(value)
+                                                added.append("<b>%s</b>" % commit['message'])
+                                        if 9 not in self.settings:
+                                            if value.split("-")[1] == "TASK":
+                                                subaction = "task"
+                                                taskname = self.__gettaskname(value, "phid")
+                                                added.append("<a href=\"%s/T%s\">%s</a>" % (self.server,
+                                                                                            taskname['id'],
+                                                                                            taskname['name']))
+                                    for value in old_values:
+                                        if 7 not in self.settings:
+                                            if value.split("-")[1] == "PROJ":
+                                                subaction = "proj"
+                                                board = self.__getproject(value, "id")
+                                                removed.append("<b>%s%s</b>" % \
+                                                           (board['project'] + " - " if board['project'] is not None
+                                                            else "", board['board']))
+                                        if 9 not in self.settings:
+                                            if value.split("-")[1] == "TASK":
+                                                subaction = "task"
+                                                taskname = self.__gettaskname(value, "phid")
+                                                removed.append("<a href=\"%s/T%s\">%s</a>" % (self.server,
+                                                                                              taskname['id'],
+                                                                                              taskname['name']))
+                                    if subaction is not None:
+                                        upd_summary[curr_num] = {"action": "edge",
+                                                                 "subaction": subaction,
+                                                                 "name": name['name'],
+                                                                 "task_id": task_id,
+                                                                 "added": added,
+                                                                 "removed": removed}
+                                        curr_num += 1
                 if len(upd_summary) > 0:
                     return upd_summary
                 else:
@@ -472,11 +582,60 @@ class TaskGetter:
                     if res_dict[result['task_id']] > 1:
                         result_messages[result['task_id']]['message'].append(resultstr)
 
+                if result['action'] == "status":
+                    if (result['new_value'] in result['closed_statuses'] and result['old_value'] in
+                        result['closed_statuses']) or (result['new_value'] not in result['closed_statuses'] and
+                                                       result['old_value'] not in result['closed_statuses']):
+                        headstr = '\U0001F4CA В таске <b>{0}</b> '.format(result['name'])
+                        resultstr = 'изменился статус с <b>{0}</b> на <b>{1}</b>\n'.format(result['rus_old_value'],
+                                                                                           result['rus_new_value'])
+
+                    elif result['new_value'] in result['closed_statuses'] and \
+                            result['old_value'] not in result['closed_statuses']:
+                        headstr = '\U0001F4CA Таск <b>{0}</b> '.format(result['name'])
+                        resultstr = 'закрыт со статусом <b>{0}</b> \n'.format(result['rus_new_value'])
+
+                    elif result['new_value'] not in result['closed_statuses'] and \
+                            result['old_value'] in result['closed_statuses']:
+                        headstr = '\U0001F4CA Таск <b>{0}</b> '.format(result['name'])
+                        resultstr = 'переоткрыт со статусом <b>{0}</b> \n'.format(result['rus_new_value'])
+
+                    else:
+                        headstr = '\U0001F4CA В таске <b>{0}</b> '.format(result['name'])
+                        resultstr = 'изменился статус с <b>{0}</b> на <b>{1}</b>\n'.format(result['rus_old_value'],
+                                                                                           result['rus_new_value'])
+
+                    sendupd(headstr, resultstr)
+
+                if result['action'] == "edge":
+                    if len(result['added']) > 0 or len(result['removed']) > 0:
+                        headstr = '\U0001F4CA В таске <b>{0}</b> '.format(result['name'])
+                        added_str = str()
+                        removed_str = str()
+                        subaction_word = {
+                            "proj": ["тег", "теги"],
+                            "cmit": ["коммит", "коммиты"],
+                            "task": ["связанный таск", "связанные таски"]
+                        }.get(result['subaction'], None)
+                        if len(result['added']) > 0:
+                            if len(result['added']) == 1:
+                                added_str = 'добавлен %s: %s' % (subaction_word[0], ', '.join(result['added']))
+                            else:
+                                added_str = 'добавлены %s: %s' % (subaction_word[1], ', '.join(result['added']))
+                        if len(result['removed']) > 0:
+                            if len(result['removed']) == 1:
+                                removed_str = 'удален %s: %s' % (subaction_word[0], ', '.join(result['removed']))
+                            else:
+                                removed_str = 'удалены %s: %s' % (subaction_word[1], ', '.join(result['removed']))
+                        resultstr = added_str + (", " if (len(added_str) > 0 and
+                                                          len(removed_str) > 0) else "") + removed_str + "\n"
+                        sendupd(headstr, resultstr)
+
             for message in result_messages.values():
                 messagestr = ""
                 for actions in message['message']:
                     messagestr += actions
-                print(TaskGetter.__timenow() + ': Для чата ' + str(self.chat_id) +
+                print(TaskGetter.__timenow() + ': Для чата ' + str(self.name) +
                       ' обнаружен обновленный таск - T' + message['id'])
                 resultstr = '\U0001F4CA В таске <b>{0}</b> произошли изменения:\n ' \
                             '{1} \n' \
@@ -517,7 +676,6 @@ class TaskGetter:
 
             data = {
                 "api.token": self.phab_api,
-                "queryKey": "open",
                 "constraints[projects][0]": board
             }
 
@@ -588,7 +746,7 @@ class TaskGetter:
         TaskGetter.__bot.send_message(chat_id, "\u2705 Мониторинг приостановлен")
 
     @staticmethod
-    def schedule(chat_id: int or None = None):
+    def schedule(chat_id: int or None = None, sudo=False):
         def schedule_task(config):
             if not config.get('active'):
                 return
@@ -602,8 +760,9 @@ class TaskGetter:
 
         if chat_id is not None:
             chat_config = TaskGetter.__config.chat(chat_id)
-            TaskGetter.__bot.send_message(chat_config.get('chat_id'), "\u2705 Мониторинг запущен"
-                                          if not chat_config.get('active') else "\u26A1 Мониторинг уже запущен")
+            if not sudo:
+                TaskGetter.__bot.send_message(chat_config.get('chat_id'), "\u2705 Мониторинг запущен"
+                                              if not chat_config.get('active') else "\u26A1 Мониторинг уже запущен")
             chat_config['active'] = True
             TaskGetter.__config.dump()
             schedule_task(TaskGetter.__config.chat(chat_id))
