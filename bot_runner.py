@@ -202,8 +202,10 @@ def checkconfig(chatid, act, skip=None):
         if config.active(chatid):
             return
         if config.boards(chatid) and config.server(chatid) and config.phab_api(chatid):
-            bot.send_message(chatid, "Бот готов к работе. Можете сконфигурировать остальные "
-                                     "настройки или начать мониторинг командой <b>/schedule</b>", parse_mode='HTML')
+            bot.send_message(chatid, "\u2705 <b>Бот готов к работе.</b> Для начала мониторинга нажмите <b>/schedule</b>"
+                                     "\nТак-же, вы можете продолжить более тонкую "
+                                     "настройку бота в главном меню (/menu)",
+                             parse_mode='HTML')
 
 
 def getptojectname(chatid, act, phids):
@@ -346,10 +348,9 @@ def callback_query(call):
         bot.send_message(call.message.chat.id, 'Введите через пробел PHIDы бордов, за которыми хотите наблюдать.\n'
                                                'PHIDы бордов можно узнать, используя команду \n'
                                                '<b>"/project_id название борда"</b> (Название не обязательно '
-                                               'вводить точь-в-точь)\n'
-                                               'Так-же, при необходимости вы можете настроить игнорируемые борды, '
-                                               'перемещения по которым отслеживаться не будут. \n'
-                                               'Для настройки нажмите <b>"Исключения"</b> в главном меню',
+                                               'вводить точь-в-точь)\n\n'
+                                               '<b>После того как скопируете PHID, введите его '
+                                               'в главном меню (/menu)</b>',
                          parse_mode='HTML', reply_markup=back_markup())
         state = "set_boards"
     elif call.data == "frequency":
@@ -396,9 +397,9 @@ def server(message, command=True):
     args = __extract_args(message.text) if command else [message.text]
     if args:
         config.set_server(message.chat.id, args[0])
-        checkconfig(message.chat.id, "add")
         bot.answer_callback_query(message.chat.id, "Сервер установлен!")
         menu(message)
+        checkconfig(message.chat.id, "add")
     else:
         bot.send_message(message.chat.id, "\U0001F3E0 Адрес сервера: %s" % config.server(message.chat.id))
 
@@ -470,8 +471,8 @@ def phab_api(message, command=True):
         config.set_phab_api(message.chat.id, args[0])
         bot.delete_message(message.chat.id, message.message_id)
         bot.send_message(message.chat.id, "API токен установлен, сообщение с токеном удалено")
-        checkconfig(message.chat.id, "add")
         menu(message)
+        checkconfig(message.chat.id, "add")
     elif config.phab_api(message.chat.id) is not None:
         bot.send_message(message.chat.id, "API токен установлен, но в целях безопасноти отображен не будет")
     else:
@@ -504,8 +505,8 @@ def boards(message, command=True):
     if args:
         for i in range(len(args)):
             config.set_boards(message.chat.id, args[i])
-        checkconfig(message.chat.id, "add")
         menu(message)
+        checkconfig(message.chat.id, "add")
     else:
         bot.send_message(message.chat.id, "\U0001F440 Отслеживаемые борды: \n%s" %
                          (getptojectname(message.chat.id, "phids", config.boards(message.chat.id))) or

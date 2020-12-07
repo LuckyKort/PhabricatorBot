@@ -207,7 +207,7 @@ class TaskGetter:
 
             proj_r = requests.post(url, params=data, verify=False)
             json_dict = proj_r.json()
-            phboard = None
+            phboard = None if act != "id" else "Restricted project"
             phproject = None
             if len(json_dict['result']['data']) > 0:
                 phboard = json_dict['result']['data'][0]['fields']['name']
@@ -237,7 +237,7 @@ class TaskGetter:
                 authorphid = json_dict['result']['data'][0]['fields']['author']['userPHID']
                 author = self.__whois(authorphid)
                 messagetext = json_dict['result']['data'][0]['fields']['message']
-                message = messagetext[0:30] + '...' if (len(messagetext) > 100) else messagetext
+                message = messagetext[0:100] + '...' if (len(messagetext) > 100) else messagetext
             return {"author": author, "message": message}
         except Exception as e:
             print('При получении коммита произошла ошибка: ', e)
