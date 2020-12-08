@@ -103,6 +103,10 @@ class TaskGetter:
     def ignored_boards(self) -> list:
         return self.__chat_config.get('ignored_boards', [])
 
+    @property
+    def ignored_columns(self) -> list:
+        return self.__chat_config.get('ignored_columns', [])
+
     @ignored_boards.setter
     def ignored_boards(self, value: list):
         assert value is not None
@@ -280,9 +284,11 @@ class TaskGetter:
                                 task_prior = TaskGetter.__getpriority(prior)[1]
                                 owner = json_dict['result']['data'][i]['fields']['ownerPHID']
                                 task_owner = self.__whois(owner)
-                                task_owner_str = task_owner['realname'] + TaskGetter.gentglink(task_owner['telegram'])
+                                task_owner_tg = TaskGetter.gentglink(task_owner['telegram'])
+                                task_owner_str = task_owner['realname'] + task_owner_tg
                                 task_author = self.__whois(author)
-                                task_author_str = task_author['realname'] + TaskGetter.gentglink(task_author['telegram'])
+                                task_author_tg = TaskGetter.gentglink(task_author['telegram'])
+                                task_author_str = task_author['realname'] + task_author_tg
                                 task_summary = {"task_id": task_id,
                                                 "board": board,
                                                 "project": project,
@@ -355,11 +361,12 @@ class TaskGetter:
                                         curr_num += 1
                                 if task['result'][curr_id][j]['transactionType'] == "core:columns":
                                     if 2 not in self.settings:
-                                        if task['result'][curr_id][j]['newValue'][0]['boardPHID'] \
-                                                not in self.ignored_boards:
+                                        board = task['result'][curr_id][j]['newValue'][0]['boardPHID']
+                                        columnphid = task['result'][curr_id][j]['newValue'][0]['columnPHID']
+                                        column = self.__getcolname(columnphid)
+                                        if (board not in self.ignored_boards) or \
+                                                (column['column'] not in self.ignored_columns):
                                             task_id = task['result'][curr_id][j]['taskID']
-                                            new_col = task['result'][curr_id][j]['newValue'][0]['columnPHID']
-                                            column = self.__getcolname(new_col)
                                             upd_summary[curr_num] = {"action": "move",
                                                                      "name": name['name'],
                                                                      "task_id": task_id,

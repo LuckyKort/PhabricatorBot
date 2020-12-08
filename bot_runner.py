@@ -312,11 +312,8 @@ def get_project(message):
                         resultname = ((pname + " - ") if int(depth) >= 1 else "") + name
                         resultstr += "*" + resultname + ":* `" + phid + "`\n"
                 footer = "\n\nВведите этот PHID в главном меню в разделе *\"Борды\"* или в меню *\"Исключения\"*"
-                markup = InlineKeyboardMarkup()
-                markup.add(InlineKeyboardButton("Вернуться в меню", callback_data="back"),
-                           InlineKeyboardButton("Исключения", callback_data="ignored")
-                           )
-                bot.send_message(message.chat.id, resultstr + footer, parse_mode='Markdown', reply_markup=markup)
+                bot.send_message(message.chat.id, resultstr + footer, parse_mode='Markdown',
+                                 reply_markup=back_ignore_markup())
             else:
                 bot.send_message(message.chat.id, "Проекты с таким именем не найдены")
         else:
@@ -344,11 +341,8 @@ def get_user(message):
                         name = result['result']['data'][i]['fields']['realName']
                         resultstr += "*" + name + ":* `" + phid + "`\n"
                 footer = "\n\nВведите этот PHID в меню *\"Исключения\"*"
-                markup = InlineKeyboardMarkup()
-                markup.add(InlineKeyboardButton("Вернуться в меню", callback_data="back"),
-                           InlineKeyboardButton("Исключения", callback_data="ignored")
-                           )
-                bot.send_message(message.chat.id, resultstr + footer, parse_mode='Markdown', reply_markup=markup)
+                bot.send_message(message.chat.id, resultstr + footer, parse_mode='Markdown',
+                                 reply_markup=back_ignore_markup())
             else:
                 bot.send_message(message.chat.id, "Пользователи с таким именем не найдены")
         else:
