@@ -696,6 +696,10 @@ class TaskGetter:
 
             upd_r = search()
 
+            self.last_new_check[board] = TaskGetter.__serverdate_to_timestamp(new_r.headers['date'])
+            self.last_update_check[board] = TaskGetter.__serverdate_to_timestamp(upd_r.headers['date'])
+            TaskGetter.__config.dump()
+
             new_parsed = self.__parse_results(new_r.json(), "new", board)
             upd_parsed = self.__parse_results(upd_r.json(), "upd", board)
 
@@ -723,9 +727,6 @@ class TaskGetter:
                         with open('logs.txt', 'a') as file:
                             file.write(updated_tasks_logline)
 
-            self.last_new_check[board] = TaskGetter.__serverdate_to_timestamp(new_r.headers['date'])
-            self.last_update_check[board] = TaskGetter.__serverdate_to_timestamp(upd_r.headers['date'])
-            TaskGetter.__config.dump()
         self.__sended_ids.clear()
 
     def tasks_search(self):

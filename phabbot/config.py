@@ -102,6 +102,11 @@ class Config(dict):
             return
         self.dump()
 
+    def unset_boards(self, chat_id, phid):
+        chat = self.chat(chat_id, False)
+        chat['boards'].remove(phid)
+        self.dump()
+
     def ignored_boards(self, chat_id):
         chat = self.chat(chat_id, False)
         return chat.get('ignored_boards', [])
@@ -116,9 +121,9 @@ class Config(dict):
             return
         self.dump()
 
-    def unset_ignored_boards(self, chat_id):
+    def unset_ignored_boards(self, chat_id, phid):
         chat = self.chat(chat_id, False)
-        chat['ignored_boards'] = []
+        chat['ignored_boards'].remove(phid)
         self.dump()
 
     def ignored_users(self, chat_id):
@@ -135,9 +140,9 @@ class Config(dict):
             return
         self.dump()
 
-    def unset_ignored_users(self, chat_id):
+    def unset_ignored_users(self, chat_id, phid):
         chat = self.chat(chat_id, False)
-        chat['ignored_users'] = []
+        chat['ignored_users'].remove(phid)
         self.dump()
 
     def ignored_columns(self, chat_id):
@@ -154,9 +159,9 @@ class Config(dict):
             return
         self.dump()
 
-    def unset_ignored_columns(self, chat_id):
+    def unset_ignored_columns(self, chat_id, value):
         chat = self.chat(chat_id, False)
-        chat['ignored_columns'] = []
+        chat['ignored_columns'].remove(value)
         self.dump()
 
     def last_new_check(self, chat_id):

@@ -221,6 +221,17 @@ def whoami(chatid):
     return phid
 
 
+def getcolumns(chatid):
+    columns_list = config.ignored_columns(chatid)
+    result_list = str()
+    if len(columns_list) > 0:
+        for i in range(len(columns_list)):
+            result_list += "%s. *%s* \n" % (i + 1, columns_list[i])
+        return result_list
+    else:
+        return "Список пуст\n"
+
+
 def getptojectname(chatid, act, phids):
     if phids and len(phids) > 0:
         defaultstr = str()
@@ -229,6 +240,7 @@ def getptojectname(chatid, act, phids):
         if not checkconfig(chatid, "check"):
             return defaultstr
         result = str()
+        count = 1
         for phid in phids:
             url = '{0}/api/project.search'.format(config.server(chatid))
             data = {
@@ -238,10 +250,10 @@ def getptojectname(chatid, act, phids):
             r = requests.post(url, params=data, verify=False)
             json = r.json()
             name = json['result']['data'][0]['fields']['name'] if len(json['result']['data']) else "Неизвестен"
-
             if len(json) > 0:
                 if act == "phids":
-                    result += "*%s:* `%s`\n" % (name, phid)
+                    result += "*%s. %s:* `%s`\n" % (count, name, phid)
+                    count += 1
                 if act == "ts":
                     time = strftime("%H:%M:%S", localtime(phids[phid]))
                     result += "*%s:* %s\n" % (name, time)
@@ -258,6 +270,7 @@ def getusername(chatid, phids):
         if not checkconfig(chatid, "check"):
             return defaultstr
         result = str()
+        count = 1
         for phid in phids:
             url = '{0}/api/user.search'.format(config.server(chatid))
             data = {
@@ -268,7 +281,8 @@ def getusername(chatid, phids):
             json = r.json()
             name = json['result']['data'][0]['fields']['realName'] if len(json['result']['data']) else "Неизвестен"
             if len(json) > 0:
-                result += "*%s:* `%s`\n" % (name, phid)
+                result += "%s. *%s:* `%s`\n" % (count, name, phid)
+                count += 1
         if len(result) > 0:
             return result
     return "Список пуст\n"
@@ -297,7 +311,7 @@ def get_project(message):
                         name = result['result']['data'][i]['fields']['name']
                         resultname = ((pname + " - ") if int(depth) >= 1 else "") + name
                         resultstr += "*" + resultname + ":* `" + phid + "`\n"
-                footer = "\n\nВведите этот PHID в меню *\"Исключения\"* или в главном меню *(/menu)*"
+                footer = "\n\nВведите этот PHID в главном меню в разделе *\"Борды\"* или в меню *\"Исключения\"*"
                 markup = InlineKeyboardMarkup()
                 markup.add(InlineKeyboardButton("Вернуться в меню", callback_data="back"),
                            InlineKeyboardButton("Исключения", callback_data="ignored")
@@ -344,9 +358,12 @@ def get_user(message):
 def ignore_markup():
     markup = InlineKeyboardMarkup()
     markup.row_width = 2
-    markup.add(InlineKeyboardButton("Борды", callback_data="ignored_boards"),
-               InlineKeyboardButton("Колонки", callback_data="ignored_columns"),
-               InlineKeyboardButton("Пользователей", callback_data="ignored_users"),
+    markup.add(InlineKeyboardButton("Добавить борды", callback_data="ignored_boards"),
+               InlineKeyboardButton("Удалить борды", callback_data="remove_ignored_boards"),
+               InlineKeyboardButton("Добавить колонки", callback_data="ignored_columns"),
+               InlineKeyboardButton("Удалить колонки", callback_data="remove_ignored_columns"),
+               InlineKeyboardButton("Добавить юзеров", callback_data="ignored_users"),
+               InlineKeyboardButton("Удалить юзеров", callback_data="remove_ignored_users"),
                InlineKeyboardButton("Вернуться в меню", callback_data="back")
                )
     return markup
@@ -358,17 +375,26 @@ def back_markup():
     return markup
 
 
-def back_markup_usrignore():
+def back_usrignore_markup():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("Вернуться в меню", callback_data="back"),
+    markup.add(InlineKeyboardButton("В \"исключения\"", callback_data="ignored"),
                InlineKeyboardButton("Добавить себя", callback_data="ignoremyself")
+               )
+    return markup
+
+
+def back_ignore_markup():
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("В меню", callback_data="back"),
+               InlineKeyboardButton("В \"исключения\"", callback_data="ignored")
                )
     return markup
 
 
 @bot.message_handler(commands=['menu'])
 def menu(message):
-
+    global state
+    state = None
     markup = InlineKeyboardMarkup()
     api_star = " *" if not config.phab_api(message.chat.id) else ""
     boards_star = " *" if not config.boards(message.chat.id) else ""
@@ -423,14 +449,23 @@ def callback_query(call):
         state = "set_phab_api"
     elif call.data == "boards":
         bot.delete_message(call.message.chat.id, call.message.message_id)
+        markup = InlineKeyboardMarkup()
+        markup.add(InlineKeyboardButton("Вернуться в меню", callback_data="menu"),
+                   InlineKeyboardButton("Удалить борды", callback_data="remove_boards")
+                   )
         bot.send_message(call.message.chat.id, 'Введите через пробел PHIDы бордов, за которыми хотите наблюдать.\n'
                                                'PHIDы бордов можно узнать, используя команду \n'
                                                '<b>"/project_id название борда"</b> (Название не обязательно '
-                                               'вводить точь-в-точь)\n\n'
-                                               '<b>После того как скопируете PHID, введите его '
-                                               'в главном меню (/menu)</b>',
-                         parse_mode='HTML', reply_markup=back_markup())
+                                               'вводить точь-в-точь)\n\n',
+                         parse_mode='HTML', reply_markup=markup)
         state = "set_boards"
+    elif call.data == "remove_boards":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, "\U0001F648 Борды, которые подключены к мониторингу: \n%s"
+                                               "\nВведите номер борда, который хотите удалить из списка:" %
+                         (getptojectname(call.message.chat.id, "phids", config.boards(call.message.chat.id)) or
+                          "Список пуст\n"), parse_mode='Markdown', reply_markup=back_markup())
+        state = "remove_boards"
     elif call.data == "frequency":
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, 'Введите частоту проверки обновлений в минутах:',
@@ -452,8 +487,7 @@ def callback_query(call):
                                                 getptojectname(call.message.chat.id, "phids",
                                                                config.ignored_boards(call.message.chat.id)) or
                                                 "Список пуст\n",
-                                                (', '.join(config.ignored_columns(call.message.chat.id))) or
-                                                "Список пуст\n",
+                                                getcolumns(call.message.chat.id),
                                                 getusername(call.message.chat.id,
                                                             config.ignored_users(call.message.chat.id)) or
                                                 "Список пуст\n"),
@@ -461,19 +495,41 @@ def callback_query(call):
     elif call.data == "ignored_boards":
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, 'Введите PHIDы бордов, перемещения по которым необходимо игнорировать:',
-                         parse_mode='HTML', reply_markup=back_markup())
+                         parse_mode='HTML', reply_markup=back_ignore_markup())
         state = "set_ignored_boards"
+    elif call.data == "remove_ignored_boards":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются: \n%s"
+                                               "\nВведите номер борда, который хотите удалить из списка:" %
+                         (getptojectname(call.message.chat.id, "phids", config.ignored_boards(call.message.chat.id)) or
+                          "Список пуст\n"), parse_mode='Markdown', reply_markup=back_ignore_markup())
+        state = "remove_ignored_boards"
     elif call.data == "ignored_columns":
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, 'Введите названия колонок, перемещения '
                                                'в которые необходимо игнорировать:',
-                         parse_mode='HTML', reply_markup=back_markup())
+                         parse_mode='HTML', reply_markup=back_ignore_markup())
         state = "set_ignored_columns"
+    elif call.data == "remove_ignored_users":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, "\U0001F648 Пользователи, действия которых игнорируются: \n%s"
+                                               "\nВведите номер пользователя, который хотите удалить из списка:" %
+                         getusername(call.message.chat.id, config.ignored_users(call.message.chat.id)) or
+                         "Список пуст\n", parse_mode='Markdown', reply_markup=back_ignore_markup())
+        state = "remove_ignored_users"
+    elif call.data == "remove_ignored_columns":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, "\U0001F648 Колонки, перемещения по которым игнорируются: \n%s"
+                                               "\nВведите номер колонки, которую хотите удалить из списка:" %
+                         getcolumns(call.message.chat.id), parse_mode='Markdown',
+                         reply_markup=back_ignore_markup())
+        state = "remove_ignored_columns"
     elif call.data == "ignored_users":
         bot.delete_message(call.message.chat.id, call.message.message_id)
-        bot.send_message(call.message.chat.id, 'Введите PHIDы пользователей, действия которых вы хотите игнорировать. '
+        bot.send_message(call.message.chat.id, 'Введите PHIDы пользователей, действия которых вы хотите игнорировать, '
+                                               'или выберите себя нажав на кнопку ниже. '
                                                'Узнать PHID пользователя можно с помощью команды /user_id',
-                         parse_mode='HTML', reply_markup=back_markup_usrignore())
+                         parse_mode='HTML', reply_markup=back_usrignore_markup())
         state = "set_ignored_users"
     elif call.data == "ignoremyself":
         bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -621,6 +677,18 @@ def boards(message, command=True):
                          "Список пуст", parse_mode='Markdown')
 
 
+def unset_boards(message):
+    if not message.text.isnumeric():
+        bot.send_message(message.chat.id, "\u274C Введите номер борда", reply_markup=back_markup())
+        return
+    if (int(message.text) > len(config.boards(message.chat.id))) or (int(message.text) < 0):
+        bot.send_message(message.chat.id, "\u274C Борда под таким номером нет", reply_markup=back_markup())
+        return
+    phid = config.boards(message.chat.id)[int(message.text) - 1]
+    config.unset_boards(message.chat.id, phid)
+    bot.send_message(message.chat.id, "\u2705 Борд удален из списка", reply_markup=back_markup())
+
+
 @bot.message_handler(commands=['ignored_boards'])
 def ignored_boards(message, command=True):
     args = __extract_args(message.text) if command else message.text.split()
@@ -631,17 +699,23 @@ def ignored_boards(message, command=True):
                                                   "и добавлен не будет" % arg, parse_mode='HTML')
                 continue
             config.set_ignored_boards(message.chat.id, arg)
-        menu(message)
+        bot.send_message(message.chat.id, "\u2705 Борд добавлен в игнорируемые", reply_markup=back_ignore_markup())
     else:
         bot.send_message(message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются: \n%s" %
                          (getptojectname(message.chat.id, "phids", config.ignored_boards(message.chat.id)) or
                           "Список пуст\n"), parse_mode='Markdown')
 
 
-@bot.message_handler(commands=['reset_ignored_boards'])
-def reset_ignored_boards(message):
-    config.unset_ignored_boards(message.chat.id)
-    bot.send_message(message.chat.id, "\u2705 Игнорируемые борды сброшены")
+def unset_ignored_boards(message):
+    if not message.text.isnumeric():
+        bot.send_message(message.chat.id, "\u274C Введите номер борда", reply_markup=back_ignore_markup())
+        return
+    if (int(message.text) > len(config.ignored_boards(message.chat.id))) or (int(message.text) < 0):
+        bot.send_message(message.chat.id, "\u274C Борда под таким номером нет", reply_markup=back_ignore_markup())
+        return
+    phid = config.ignored_boards(message.chat.id)[int(message.text) - 1]
+    config.unset_ignored_boards(message.chat.id, phid)
+    bot.send_message(message.chat.id, "\u2705 Борд удален из списка", reply_markup=back_ignore_markup())
 
 
 @bot.message_handler(commands=['ignored_users'])
@@ -654,35 +728,49 @@ def ignored_users(message, command=True, phid=None):
                                                   "пользователя и добавлен не будет" % arg, parse_mode='HTML')
                 continue
             config.set_ignored_users(message.chat.id, arg)
-        menu(message)
+        bot.send_message(message.chat.id, "\u2705 Пользователь добавлен в игнориуемые",
+                         reply_markup=back_ignore_markup())
     else:
         bot.send_message(message.chat.id, "\U0001F648 Пользователи, действия которых игнорируются: \n%s" %
                          (getusername(message.chat.id, config.ignored_users(message.chat.id)) or
                           "Список пуст\n"), parse_mode='Markdown')
 
 
-@bot.message_handler(commands=['reset_ignored_users'])
-def reset_ignored_users(message):
-    config.unset_ignored_users(message.chat.id)
-    bot.send_message(message.chat.id, "\u2705 Игнорируемые пользователи сброшены")
+def unset_ignored_users(message):
+    if not message.text.isnumeric():
+        bot.send_message(message.chat.id, "\u274C Введите номер пользователя", reply_markup=back_ignore_markup())
+        return
+    if (int(message.text) > len(config.ignored_users(message.chat.id))) or (int(message.text) < 0):
+        bot.send_message(message.chat.id, "\u274C Пользователя под таким номером нет", reply_markup=back_ignore_markup())
+        return
+    phid = config.ignored_users(message.chat.id)[int(message.text) - 1]
+    config.unset_ignored_users(message.chat.id, phid)
+    bot.send_message(message.chat.id, "\u2705 Пользователь удален из списка", reply_markup=back_ignore_markup())
 
 
 @bot.message_handler(commands=['ignored_columns'])
 def ignored_columns(message, command=True):
-    args = __extract_args(message.text) if command else message.text
+    args = __extract_args(message.text) if command else message.text.split()
     if args:
-        args = ' '.join(args).split(',')
-        config.set_ignored_columns(message.chat.id, args)
-        menu(message)
+        for arg in args:
+            config.set_ignored_columns(message.chat.id, arg)
+        bot.send_message(message.chat.id, "\u2705 Колонка помещена в игнорируемые",
+                         reply_markup=back_ignore_markup())
     else:
         bot.send_message(message.chat.id, "\U0001F648 Колонки, перемещения в которые игнорируются: \n%s" %
-                         (', '.join(config.ignored_columns(message.chat.id)) or "Список пуст"))
+                         getcolumns(message.chat.id))
 
 
-@bot.message_handler(commands=['reset_ignored_columns'])
-def reset_ignored_columns(message):
-    config.unset_ignored_columns(message.chat.id)
-    bot.send_message(message.chat.id, "\u2705 Игнорируемые колонки сброшены")
+def unset_ignored_columns(message):
+    if not message.text.isnumeric():
+        bot.send_message(message.chat.id, "\u274C Введите номер колонки", reply_markup=back_ignore_markup())
+        return
+    if (int(message.text) > len(config.ignored_columns(message.chat.id))) or (int(message.text) < 0):
+        bot.send_message(message.chat.id, "\u274C Колонки под таким номером нет", reply_markup=back_ignore_markup())
+        return
+    value = config.ignored_columns(message.chat.id)[int(message.text) - 1]
+    config.unset_ignored_columns(message.chat.id, value)
+    bot.send_message(message.chat.id, "\u2705 Колонка удалена из списка", reply_markup=back_ignore_markup())
 
 
 @bot.message_handler(commands=['last_check'])
@@ -707,14 +795,22 @@ def setter(message):
         phab_api(message, False)
     if state == "set_boards":
         boards(message, False)
+    if state == "remove_boards":
+        unset_boards(message)
     if state == "set_frequency":
         frequency(message, False)
     if state == "set_ignored_boards":
         ignored_boards(message, False)
+    if state == "remove_ignored_boards":
+        unset_ignored_boards(message)
     if state == "set_ignored_columns":
         ignored_columns(message, False)
+    if state == "remove_ignored_columns":
+        unset_ignored_columns(message)
     if state == "set_ignored_users":
         ignored_users(message, False)
+    if state == "remove_ignored_users":
+        unset_ignored_users(message)
     state = None
 
 
