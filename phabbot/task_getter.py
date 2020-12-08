@@ -480,9 +480,9 @@ class TaskGetter:
                                                 if value.split("-")[1] == "PROJ":
                                                     subaction = "proj"
                                                     board = self.__getproject(value, "id")
-                                                    removed.append("<b>%s%s</b>" % \
-                                                               (board['project'] + " - " if board['project'] is not None
-                                                                else "", board['board']))
+                                                    removed.append("<b>%s%s</b>" % (board['project'] + " - " if
+                                                                                    board['project'] is not None
+                                                                                    else "", board['board']))
                                             if 9 not in self.settings:
                                                 if value.split("-")[1] == "TASK":
                                                     subaction = "task"

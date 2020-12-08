@@ -303,14 +303,21 @@ def get_project(message):
             result = r.json()
             if len(result['result']['data']) > 0:
                 resultstr = 'Результат поиска:\n'
+                count = 1
                 for i in range(len(result['result']['data'])):
                     if result['result']['data'][i]['fields']['color']['key'] != "disabled":
+                        if count > 50:
+                            resultstr += "\nВнимание! Показаны первые 50 результатов. " \
+                                         "Если искомого борда нет в списке уточните запрос\n"
+                            break
                         phid = result['result']['data'][i]['phid']
                         depth = result['result']['data'][i]['fields']['depth']
                         pname = (result['result']['data'][i]['fields']['parent']['name']) if depth != 0 else None
                         name = result['result']['data'][i]['fields']['name']
-                        resultname = ((pname + " - ") if int(depth) >= 1 else "") + name
-                        resultstr += "*" + resultname + ":* `" + phid + "`\n"
+                        resultname = ((pname.replace("*", "'") + " - ") if int(depth) >= 1 else
+                                      "") + name.replace("*", "'")
+                        resultstr += "%s. *%s:* `%s`\n" % (count, resultname, phid)
+                        count += 1
                 footer = "\n\nВведите этот PHID в главном меню в разделе *\"Борды\"* или в меню *\"Исключения\"*"
                 bot.send_message(message.chat.id, resultstr + footer, parse_mode='Markdown',
                                  reply_markup=back_ignore_markup())
