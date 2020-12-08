@@ -31,12 +31,12 @@ def getname(message):
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    menu(message)
     bot.send_message(message.chat.id, 'Для начала работы бота вам необходимо сконфигурировать бота.'
                                       '\nНеобходимые для конфигурации настройки помечены в главном меню звёздочкой, '
                                       'остальные настраиваются по желанию'
                                       '\nПосле окончания конфигурации введите <b>"/schedule"</b>, чтобы '
                                       'начать отслеживание', parse_mode="HTML")
-    menu(message)
 
 
 @bot.message_handler(commands=['help'])
@@ -208,6 +208,19 @@ def checkconfig(chatid, act, skip=None):
                              parse_mode='HTML')
 
 
+def whoami(chatid):
+    if not checkconfig(chatid, "check"):
+        return False
+    url = config.get('server') + '/api/user.whoami'
+    data = {
+        "api.token": config.phab_api(chatid)
+    }
+    result = requests.post(url, params=data, allow_redirects=False, verify=False)
+    json = result.json()
+    phid = json['result']
+    return phid
+
+
 def getptojectname(chatid, act, phids):
     if phids and len(phids) > 0:
         defaultstr = str()
@@ -237,6 +250,30 @@ def getptojectname(chatid, act, phids):
     return "Список пуст\n"
 
 
+def getusername(chatid, phids):
+    if phids and len(phids) > 0:
+        defaultstr = str()
+        for phid in phids:
+            defaultstr += "\n*Неизвестен: * `" + phid + "`"
+        if not checkconfig(chatid, "check"):
+            return defaultstr
+        result = str()
+        for phid in phids:
+            url = '{0}/api/user.search'.format(config.server(chatid))
+            data = {
+                "api.token": config.phab_api(chatid),
+                "constraints[phids][0]": phid
+            }
+            r = requests.post(url, params=data, verify=False)
+            json = r.json()
+            name = json['result']['data'][0]['fields']['realName'] if len(json['result']['data']) else "Неизвестен"
+            if len(json) > 0:
+                result += "*%s:* `%s`\n" % (name, phid)
+        if len(result) > 0:
+            return result
+    return "Список пуст\n"
+
+
 @bot.message_handler(commands=['project_id'])
 def get_project(message):
     if checkconfig(message.chat.id, "check", "boards"):
@@ -260,18 +297,56 @@ def get_project(message):
                         name = result['result']['data'][i]['fields']['name']
                         resultname = ((pname + " - ") if int(depth) >= 1 else "") + name
                         resultstr += "*" + resultname + ":* `" + phid + "`\n"
-                bot.send_message(message.chat.id, resultstr, parse_mode='Markdown')
+                footer = "\n\nВведите этот PHID в меню *\"Исключения\"* или в главном меню *(/menu)*"
+                markup = InlineKeyboardMarkup()
+                markup.add(InlineKeyboardButton("Вернуться в меню", callback_data="back"),
+                           InlineKeyboardButton("Исключения", callback_data="ignored")
+                           )
+                bot.send_message(message.chat.id, resultstr + footer, parse_mode='Markdown', reply_markup=markup)
             else:
                 bot.send_message(message.chat.id, "Проекты с таким именем не найдены")
         else:
-            bot.send_message(message.chat.id, "Введите название проекта!")
+            bot.send_message(message.chat.id, "Введите название проекта")
+
+
+@bot.message_handler(commands=['user_id'])
+def get_user(message):
+    if checkconfig(message.chat.id, "check", "boards"):
+        args = __extract_args(message.text)
+        if args is not None:
+            args = ' '.join(args)
+            url = '{0}/api/user.search'.format(config.server(message.chat.id))
+            data = {
+                "api.token": config.phab_api(message.chat.id),
+                "constraints[nameLike]": args,
+            }
+            r = requests.post(url, params=data, verify=False)
+            result = r.json()
+            if len(result['result']['data']) > 0:
+                resultstr = 'Результат поиска:\n'
+                for i in range(len(result['result']['data'])):
+                    if "activated" in result['result']['data'][i]['fields']['roles']:
+                        phid = result['result']['data'][i]['phid']
+                        name = result['result']['data'][i]['fields']['realName']
+                        resultstr += "*" + name + ":* `" + phid + "`\n"
+                footer = "\n\nВведите этот PHID в меню *\"Исключения\"*"
+                markup = InlineKeyboardMarkup()
+                markup.add(InlineKeyboardButton("Вернуться в меню", callback_data="back"),
+                           InlineKeyboardButton("Исключения", callback_data="ignored")
+                           )
+                bot.send_message(message.chat.id, resultstr + footer, parse_mode='Markdown', reply_markup=markup)
+            else:
+                bot.send_message(message.chat.id, "Пользователи с таким именем не найдены")
+        else:
+            bot.send_message(message.chat.id, "Введите имя пользователя")
 
 
 def ignore_markup():
     markup = InlineKeyboardMarkup()
     markup.row_width = 2
-    markup.add(InlineKeyboardButton("Игноровать борды", callback_data="ignored_boards"),
-               InlineKeyboardButton("Игноровать колонки", callback_data="ignored_columns"),
+    markup.add(InlineKeyboardButton("Борды", callback_data="ignored_boards"),
+               InlineKeyboardButton("Колонки", callback_data="ignored_columns"),
+               InlineKeyboardButton("Пользователей", callback_data="ignored_users"),
                InlineKeyboardButton("Вернуться в меню", callback_data="back")
                )
     return markup
@@ -280,6 +355,14 @@ def ignore_markup():
 def back_markup():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("Вернуться в меню", callback_data="back"))
+    return markup
+
+
+def back_markup_usrignore():
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Вернуться в меню", callback_data="back"),
+               InlineKeyboardButton("Добавить себя", callback_data="ignoremyself")
+               )
     return markup
 
 
@@ -303,9 +386,7 @@ def menu(message):
                       "\n\U0001F3E0 Адрес фабрикатора: %s\n" 
                       "\n\u23F0 Частота опроса сервера (минуты): %s\n" 
                       "\n\U0001F440 Отслеживаемые борды: \n%s" 
-                      "\n\U0001F648 Борды, перемещения по которым игнорируются: \n%s" 
-                      "\n\U0001F648 Колонки, перемещения в которые игнорируются: \n%s\n"
-                      "\nВ меню *\"Исключения\"* вы можете настроить игнорирование "
+                      "\nВ меню *\"Исключения\"* вы можете настроить игнорирование пользователей, "
                       "перемещений по определенным бордам или колонкам\n"
                       "\nВ меню *\"Настройки\"* вы можете выбрать уведомления каких типов хотите получать\n"
                       "\n*Выберите, что вы хотите настроить:* ") % (
@@ -318,10 +399,7 @@ def menu(message):
                       "Скрыт",
                       config.frequency(message.chat.id) or "2 (Стандартное значение)",
                       getptojectname(message.chat.id, "phids", config.boards(message.chat.id)) or
-                      "Список пуст\n",
-                      getptojectname(message.chat.id, "phids", config.ignored_boards(message.chat.id)) or
-                      "Список пуст\n",
-                      (', '.join(config.ignored_columns(message.chat.id))) or "Список пуст"
+                      "Список пуст\n"
                      ), parse_mode='Markdown', reply_markup=markup)
 
 
@@ -366,8 +444,20 @@ def callback_query(call):
                                                'хотите получать оповещения о событиях которые происходят, например, '
                                                'на борде который к вам не относится, но указан в задаче.\n'
                                                'Например, вы менеджер, и не хотите получать оповещения о движении таска'
-                                               'на борде разработчиков. \nВыберите, что вы хотите игнорировать:',
-                         parse_mode='HTML', reply_markup=ignore_markup())
+                                               'на борде разработчиков. \n'
+                                               '\n\U0001F648 Борды, перемещения по которым игнорируются: \n%s'
+                                               '\n\U0001F648 Колонки, перемещения в которые игнорируются: \n%s'
+                                               '\n\U0001F648 Пользователи, действия которых игнорируются: \n%s\n'
+                                               '\nВыберите, что вы хотите игнорировать:' % (
+                                                getptojectname(call.message.chat.id, "phids",
+                                                               config.ignored_boards(call.message.chat.id)) or
+                                                "Список пуст\n",
+                                                (', '.join(config.ignored_columns(call.message.chat.id))) or
+                                                "Список пуст\n",
+                                                getusername(call.message.chat.id,
+                                                            config.ignored_users(call.message.chat.id)) or
+                                                "Список пуст\n"),
+                         parse_mode='Markdown', reply_markup=ignore_markup())
     elif call.data == "ignored_boards":
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, 'Введите PHIDы бордов, перемещения по которым необходимо игнорировать:',
@@ -379,6 +469,16 @@ def callback_query(call):
                                                'в которые необходимо игнорировать:',
                          parse_mode='HTML', reply_markup=back_markup())
         state = "set_ignored_columns"
+    elif call.data == "ignored_users":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, 'Введите PHIDы пользователей, действия которых вы хотите игнорировать. '
+                                               'Узнать PHID пользователя можно с помощью команды /user_id',
+                         parse_mode='HTML', reply_markup=back_markup_usrignore())
+        state = "set_ignored_users"
+    elif call.data == "ignoremyself":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        myphid = whoami(call.message.chat.id)
+        ignored_users(call.message, False, myphid['phid'])
     elif call.data == "settings":
         bot.delete_message(call.message.chat.id, call.message.message_id)
         settings(call.message)
@@ -466,13 +566,17 @@ def where_apitoken(message):
 
 @bot.message_handler(commands=['phab_api'])
 def phab_api(message, command=True):
-    args = __extract_args(message.text) if command else [message.text]
+    args = __extract_args(message.text) if command else message.text
     if args:
-        config.set_phab_api(message.chat.id, args[0])
-        bot.delete_message(message.chat.id, message.message_id)
-        bot.send_message(message.chat.id, "API токен установлен, сообщение с токеном удалено")
-        menu(message)
-        checkconfig(message.chat.id, "add")
+        if args[0].startswith("api-"):
+            config.set_phab_api(message.chat.id, args[0])
+            bot.delete_message(message.chat.id, message.message_id)
+            bot.send_message(message.chat.id, "API токен установлен, сообщение с токеном удалено")
+            menu(message)
+            checkconfig(message.chat.id, "add")
+        else:
+            bot.send_message(message.chat.id, "\u274C Указанный вами токен <b>%s</b> некорректен и установлен "
+                                              "не будет" % args[0], parse_mode='HTML')
     elif config.phab_api(message.chat.id) is not None:
         bot.send_message(message.chat.id, "API токен установлен, но в целях безопасноти отображен не будет")
     else:
@@ -503,8 +607,12 @@ def frequency(message, command=True):
 def boards(message, command=True):
     args = __extract_args(message.text) if command else message.text.replace('.', '').replace(',', '').split()
     if args:
-        for i in range(len(args)):
-            config.set_boards(message.chat.id, args[i])
+        for arg in args:
+            if not arg.startswith("PHID-PROJ"):
+                bot.send_message(message.chat.id, "\u274C Указанный вами PHID <b>%s</b> не является PHID'ом проекта"
+                                                  "и добавлен не будет" % arg, parse_mode='HTML')
+                continue
+            config.set_boards(message.chat.id, arg)
         menu(message)
         checkconfig(message.chat.id, "add")
     else:
@@ -515,9 +623,14 @@ def boards(message, command=True):
 
 @bot.message_handler(commands=['ignored_boards'])
 def ignored_boards(message, command=True):
-    args = __extract_args(message.text) if command else message.text
+    args = __extract_args(message.text) if command else message.text.split()
     if args:
-        config.set_ignored_boards(message.chat.id, args)
+        for arg in args:
+            if not arg.startswith("PHID-PROJ"):
+                bot.send_message(message.chat.id, "\u274C Указанный вами PHID <b>%s</b> не является PHID'ом проекта"
+                                                  "и добавлен не будет" % arg, parse_mode='HTML')
+                continue
+            config.set_ignored_boards(message.chat.id, arg)
         menu(message)
     else:
         bot.send_message(message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются: \n%s" %
@@ -529,6 +642,29 @@ def ignored_boards(message, command=True):
 def reset_ignored_boards(message):
     config.unset_ignored_boards(message.chat.id)
     bot.send_message(message.chat.id, "\u2705 Игнорируемые борды сброшены")
+
+
+@bot.message_handler(commands=['ignored_users'])
+def ignored_users(message, command=True, phid=None):
+    args = __extract_args(message.text) if command else (message.text.split() if phid is None else phid.split())
+    if args:
+        for arg in args:
+            if not arg.startswith("PHID-USER"):
+                bot.send_message(message.chat.id, "\u274C Указанный вами PHID <b>%s</b> не является PHID'ом "
+                                                  "пользователя и добавлен не будет" % arg, parse_mode='HTML')
+                continue
+            config.set_ignored_users(message.chat.id, arg)
+        menu(message)
+    else:
+        bot.send_message(message.chat.id, "\U0001F648 Пользователи, действия которых игнорируются: \n%s" %
+                         (getusername(message.chat.id, config.ignored_users(message.chat.id)) or
+                          "Список пуст\n"), parse_mode='Markdown')
+
+
+@bot.message_handler(commands=['reset_ignored_users'])
+def reset_ignored_users(message):
+    config.unset_ignored_users(message.chat.id)
+    bot.send_message(message.chat.id, "\u2705 Игнорируемые пользователи сброшены")
 
 
 @bot.message_handler(commands=['ignored_columns'])
@@ -577,6 +713,8 @@ def setter(message):
         ignored_boards(message, False)
     if state == "set_ignored_columns":
         ignored_columns(message, False)
+    if state == "set_ignored_users":
+        ignored_users(message, False)
     state = None
 
 

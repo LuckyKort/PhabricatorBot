@@ -121,6 +121,25 @@ class Config(dict):
         chat['ignored_boards'] = []
         self.dump()
 
+    def ignored_users(self, chat_id):
+        chat = self.chat(chat_id, False)
+        return chat.get('ignored_users', [])
+
+    def set_ignored_users(self, chat_id, ignored_users: list):
+        chat = self.chat(chat_id, False)
+        if 'ignored_users' not in chat:
+            chat['ignored_users'] = [ignored_users]
+        elif ignored_users not in chat['ignored_users']:
+            chat['ignored_users'] += [ignored_users]
+        else:
+            return
+        self.dump()
+
+    def unset_ignored_users(self, chat_id):
+        chat = self.chat(chat_id, False)
+        chat['ignored_users'] = []
+        self.dump()
+
     def ignored_columns(self, chat_id):
         chat = self.chat(chat_id, False)
         return chat.get('ignored_columns', [])
