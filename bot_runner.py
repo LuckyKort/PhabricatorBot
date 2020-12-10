@@ -451,7 +451,7 @@ def callback_query(call):
     elif call.data == "boards":
         bot.delete_message(call.message.chat.id, call.message.message_id)
         markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("Вернуться в меню", callback_data="menu"),
+        markup.add(InlineKeyboardButton("Вернуться в меню", callback_data="back"),
                    InlineKeyboardButton("Удалить борды", callback_data="remove_boards")
                    )
         bot.send_message(call.message.chat.id, 'Введите через пробел PHIDы бордов, за которыми хотите наблюдать.\n'

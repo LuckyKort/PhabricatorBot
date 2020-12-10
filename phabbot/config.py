@@ -105,6 +105,8 @@ class Config(dict):
     def unset_boards(self, chat_id, phid):
         chat = self.chat(chat_id, False)
         chat['boards'].remove(phid)
+        chat['last_new_check'].pop(phid)
+        chat['last_update_check'].pop(phid)
         self.dump()
 
     def ignored_boards(self, chat_id):
