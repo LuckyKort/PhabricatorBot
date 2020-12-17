@@ -364,7 +364,7 @@ class TaskGetter:
                                         board = task['result'][curr_id][j]['newValue'][0]['boardPHID']
                                         columnphid = task['result'][curr_id][j]['newValue'][0]['columnPHID']
                                         column = self.__getcolname(columnphid)
-                                        if (board not in self.ignored_boards) or \
+                                        if (board not in self.ignored_boards) and \
                                                 (column['column'] not in self.ignored_columns):
                                             task_id = task['result'][curr_id][j]['taskID']
                                             upd_summary[curr_num] = {"action": "move",
@@ -577,9 +577,7 @@ class TaskGetter:
                     resultstr = 'перемещен в колонку ' \
                                 '<b>{0}</b> на борде <b>{1}{2}</b>\n'.format(result['column'],
                                                                              projstr,
-                                                                             result['board'],
-                                                                             self.server,
-                                                                             result['task_id']
+                                                                             result['board']
                                                                              )
                     sendupd(headstr, resultstr)
 

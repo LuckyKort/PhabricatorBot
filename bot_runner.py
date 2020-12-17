@@ -641,19 +641,20 @@ def where_apitoken(message):
 def phab_api(message, command=True):
     args = __extract_args(message.text) if command else message.text
     if args:
-        if args[0].startswith("api-"):
-            config.set_phab_api(message.chat.id, args[0])
+        if args.startswith("api-"):
+            config.set_phab_api(message.chat.id, args)
             bot.delete_message(message.chat.id, message.message_id)
             bot.send_message(message.chat.id, "API токен установлен, сообщение с токеном удалено")
             menu(message)
             checkconfig(message.chat.id, "add")
         else:
             bot.send_message(message.chat.id, "\u274C Указанный вами токен <b>%s</b> некорректен и установлен "
-                                              "не будет" % args[0], parse_mode='HTML')
+                                              "не будет" % args, parse_mode='HTML', reply_markup=back_markup())
     elif config.phab_api(message.chat.id) is not None:
-        bot.send_message(message.chat.id, "API токен установлен, но в целях безопасноти отображен не будет")
+        bot.send_message(message.chat.id, "API токен установлен, но в целях безопасноти отображен не будет",
+                         reply_markup=back_markup())
     else:
-        bot.send_message(message.chat.id, "API токен не установлен")
+        bot.send_message(message.chat.id, "API токен не установлен", reply_markup=back_markup())
 
 
 @bot.message_handler(commands=['frequency'])
