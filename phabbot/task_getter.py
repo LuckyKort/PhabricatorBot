@@ -176,6 +176,42 @@ class TaskGetter:
             print('При получении имени таска произошла ошибка: ', e)
             return None
 
+    def __gettaskinfo(self, value):
+        try:
+            if value is not None:
+                url = '{0}/api/maniphest.search'.format(self.server)
+                data = {
+                    "api.token": self.phab_api,
+                    "constraints[ids][0]": value,
+                }
+                r = requests.post(url, params=data, verify=False)
+                json_dict = r.json()
+                if len(json_dict['result']['data']) > 0:
+                    name = json_dict['result']['data'][0]['fields']['name']
+                    desc = json_dict['result']['data'][0]['fields']['description']['raw']
+                    priority = self.__getpriority(json_dict['result']['data'][0]['fields']['priority']['value'])[0]
+                    status = self.__getstatus(json_dict['result']['data'][0]['fields']['status']['value'])
+                    author = self.__whois(json_dict['result']['data'][0]['fields']['authorPHID'])['realname']
+                    owner = self.__whois(json_dict['result']['data'][0]['fields']['ownerPHID'])['realname']
+                    created = datetime.fromtimestamp(json_dict['result']['data'][0]['fields']['dateCreated'])
+                    summary = {
+                                  "name": name,
+                                  "desc": desc,
+                                  "priority": priority,
+                                  "status": status,
+                                  "author": author,
+                                  "owner": owner,
+                                  "created": created
+                    }
+                    return summary
+                else:
+                    return None
+            else:
+                return None
+        except Exception as e:
+            print('При получении информации о таске произошла ошибка: ', e)
+            return None
+
     def __getcolname(self, phid):
         try:
             if phid is not None:
@@ -255,16 +291,38 @@ class TaskGetter:
     def __getpriority(value):
         try:
             task_prior = {
-                10: ("интересный", "интересным", "интересного"),
-                25: ("низкий", "низким", "низкого"),
-                50: ("средний", "средним", "среднего"),
-                80: ("высокий", "высоким", "высокого"),
-                90: ("требующий уточнения", "требующим уточнения", "требущего уточнения"),
-                100: ("срочный", "срочным", "срочного")
-            }.get(value, ("неопределенный", "неопределенным", "неопределенного"))
+                10: ("Интересный", "интересным", "интересного"),
+                25: ("Низкий", "низким", "низкого"),
+                50: ("Средний", "средним", "среднего"),
+                80: ("Высокий", "высоким", "высокого"),
+                90: ("Требующий уточнения", "требующим уточнения", "требущего уточнения"),
+                100: ("Срочный", "срочным", "срочного")
+            }.get(value, ("Неопределенный", "неопределенным", "неопределенного"))
             return task_prior
         except Exception as e:
             print('При получении приоритета произошла ошибка: ', e)
+            return None
+
+    @staticmethod
+    def __getstatus(value):
+        try:
+            task_status = {"open": "Открыт",
+                           "resolved": "Решен",
+                           "wontfix": "Wontfix",
+                           "invalid": "Некорректен",
+                           "spite": "Spite",
+                           "analytics": "Аналитика",
+                           "testing": "Тестирование",
+                           "todo": "TODO",
+                           "verified": "Верифицирован",
+                           "projecting": "Проектирование",
+                           "inprogress": "В работе",
+                           "stalled": "Затянут",
+                           "complete": "Завершен"
+            }.get(value, "неопределенный")
+            return task_status
+        except Exception as e:
+            print('При получении статуса произошла ошибка: ', e)
             return None
 
     def __parse_results(self, json_dict, act, board):
@@ -421,20 +479,6 @@ class TaskGetter:
                                         old_value = task['result'][curr_id][j]['oldValue']
                                         new_value = task['result'][curr_id][j]['newValue']
                                         closed_statuses = ["invalid", "resolved", "wontfix", "spite"]
-                                        rus_stat = {"open": "Открыт",
-                                                    "resolved": "Решен",
-                                                    "wontfix": "Wontfix",
-                                                    "invalid": "Некорректен",
-                                                    "spite": "Spite",
-                                                    "analytics": "Аналитика",
-                                                    "testing": "Тестирование",
-                                                    "todo": "TODO",
-                                                    "verified": "Верифицирован",
-                                                    "projecting": "Проектирование",
-                                                    "in progress": "В работе",
-                                                    "stalled": "Затянут",
-                                                    "complete": "Завершен"
-                                                    }
                                         upd_summary[curr_num] = {"action": "status",
                                                                  "author": author,
                                                                  "name": name['name'],
@@ -442,10 +486,8 @@ class TaskGetter:
                                                                  "old_value": old_value,
                                                                  "new_value": new_value,
                                                                  "closed_statuses": closed_statuses,
-                                                                 "rus_old_value": rus_stat.get(old_value,
-                                                                                               "Неопределенный"),
-                                                                 "rus_new_value": rus_stat.get(new_value,
-                                                                                               "Неопределенный")
+                                                                 "rus_old_value": self.__getstatus(old_value),
+                                                                 "rus_new_value": self.__getstatus(new_value)
                                                                  }
                                         curr_num += 1
                                 if task['result'][curr_id][j]['transactionType'] == "core:edge":
@@ -791,6 +833,18 @@ class TaskGetter:
                     return
                 schedule.run_pending()
                 time.sleep(1)
+
+    @staticmethod
+    def info(chat_id: int or None = None, value=False):
+        def get_info(config):
+            task_getter = TaskGetter(config)
+            assert task_getter.chat_id is not None
+            info = task_getter.__gettaskinfo(value)
+            return info
+        if chat_id is not None:
+            return get_info(TaskGetter.__config.chat(chat_id))
+        else:
+            pass
 
     @staticmethod
     def main_loop():

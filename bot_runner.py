@@ -2,11 +2,16 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import requests
 import telebot
 import ast
+import re
+import logging
+import os
 from phabbot.config import Config
 from phabbot.task_getter import TaskGetter
 from time import strftime, localtime
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 
+# logger = telebot.logger
+# telebot.logger.setLevel(logging.DEBUG) # Outputs debug messages to console.
 
 CHAT_STATE_SET_SERVER = "set_server"
 CHAT_STATE_SET_PHABAPI = "set_phab_api"
@@ -342,6 +347,79 @@ def get_project(message):
             bot.send_message(message.chat.id, "Введите название проекта")
 
 
+def get_images(chat_id, ids):
+    links = list()
+    imgnames = list()
+    url = '{0}/api/file.search'.format(config.server(chat_id))
+    data = {
+        "api.token": config.phab_api(chat_id),
+    }
+    for id in range(len(ids)):
+        data['constraints[ids][' + str(id) + ']'] = ids[id]
+    r = requests.post(url, params=data, verify=False)
+    result = r.json()
+    result['result']['data'].reverse()
+    for i in range(len(result['result']['data'])):
+        if result['result']['data'][i]['fields']['name'] == "image.png":
+            links.append(result['result']['data'][i]['fields']['dataURI'])
+
+    media = []
+    for link in range(len(links)):
+        url = links[link]
+        r = requests.get(url, allow_redirects=True, verify=False)
+        filename = '%s-image%s.png' % (chat_id, link)
+        open(filename, 'wb').write(r.content)
+        media.append(InputMediaPhoto(open(filename, 'rb'), caption="Изображение " + str(link + 1)))
+        imgnames.append(filename)
+    return {"imgnames": imgnames, "media": media}
+
+
+@bot.message_handler(commands=['info'])
+def get_info(message, command=True):
+    if checkconfig(message.chat.id, "check", "boards"):
+        args = __extract_args(message.text) if command else [message.text]
+        if args[0].lower().startswith('t'):
+            args[0] = args[0][1:]
+        if args[0] is not None:
+            info = TaskGetter.info(message.chat.id, args[0])
+            if info is not None:
+                file_ids = re.findall(r'{F([\s\S]+?)}', info['desc'])
+                images = get_images(message.chat.id, file_ids)
+                replace_imgs = info['desc']
+                for id in range(len(images['imgnames'])):
+                    replace_imgs = re.sub(r'{F' + str(images['imgnames'][id]) + '}',
+                                          '*(Изображение ' + str(id + 1) + ')*',
+                                          replace_imgs)
+                replace_attach = re.sub(r'{F([\s\S]+?)}', '*(Вложение)*', replace_imgs)
+                str_message = ("\U0001F4CA *Задача Т%s:* %s \n\n"
+                               "\U0001F4C5 *Дата создания:* %s \n\n"
+                               "\U0001F4C8 *Приоритет:* %s \n\n"
+                               "\U0001F4CC *Статус:* %s \n\n"
+                               "\U0001F425 *Автор:* %s \n\n"
+                               "\U0001F425 *Исполнитель:* %s \n\n"
+                               "\U0001F4CB *Текст задачи:* \n%s \n\n"
+                               "\U0001F449 [Открыть таск](%s/T%s)") % (args[0],
+                                                                       info['name'],
+                                                                       info['created'].strftime("%d.%m.%Y %H:%M"),
+                                                                       info['priority'],
+                                                                       info['status'],
+                                                                       info['author'],
+                                                                       info['owner'],
+                                                                       replace_attach,
+                                                                       config.server(message.chat.id),
+                                                                       args[0])
+                bot.send_message(message.chat.id, str_message, parse_mode='Markdown')
+                bot.send_media_group(message.chat.id, images['media'])
+                for img in images['imgnames']:
+                    if os.path.exists(img):
+                        os.remove(img)
+
+            else:
+                bot.send_message(message.chat.id, "Задачи с таким ID не найдены или у вас нет к ним доступа")
+        else:
+            bot.send_message(message.chat.id, "Задачи с таким ID не найдены или у вас нет к ним доступа")
+
+
 @bot.message_handler(commands=['user_id'])
 def get_user(message):
     if checkconfig(message.chat.id, "check", "boards"):
@@ -454,7 +532,6 @@ def callback_query(call):
     try:
         callback = ast.literal_eval(call.data)
     except Exception as e:
-        print(e)
         callback = None
     if call.data == CHAT_STATE_SET_SERVER:
         bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -562,6 +639,11 @@ def callback_query(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
         menu(call.message)
         set_chat_state(None)
+    elif call.data.startswith('info'):
+        task_id = call.data.replace("info", "")
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        call.message.text = task_id
+        get_info(call.message, command=False)
     elif callback[0] == "settings":
         bot.delete_message(call.message.chat.id, call.message.message_id)
         set_settings(call.message, callback[1])
@@ -669,14 +751,15 @@ def frequency(message, command=True):
     if not args[0].isnumeric():
         bot.send_message(message.chat.id, "Введите целочисленное значение!")
         return
-    if int(args[0]) > 1:
+    if int(args[0]) >= 1:
         config.set_frequency(message.chat.id, int(args[0]))
         bot.send_message(message.chat.id,
                          "\u23F0 Частота опроса сервера (минуты): %d" % (
                                      config.frequency(message.chat.id) or 2))
         menu(message)
     else:
-        bot.send_message(message.chat.id, "Частота опроса не может быть менее минуты \U0001F609")
+        bot.send_message(message.chat.id, "Частота опроса не может быть менее минуты \U0001F609",
+                         reply_markup=back_markup())
 
 
 @bot.message_handler(commands=['boards'])
@@ -809,6 +892,16 @@ def setter(message):
     chat_state = state.get(message.chat.id)
     if message.text[:1] == "/":
         state[message.chat.id] = None
+        return
+    if re.match(r'(t\d+)', message.text.lower()):
+        state[message.chat.id] = None
+        if message.chat.type == "private":
+            get_info(message, command=False)
+        else:
+            markup = InlineKeyboardMarkup()
+            markup.add(InlineKeyboardButton("Да", callback_data='info' + message.text))
+            bot.send_message(message.chat.id, "Хотите получить информацию о задаче *%s*?" % message.text.capitalize(),
+                             reply_markup=markup, parse_mode='Markdown')
         return
     if chat_state == CHAT_STATE_SET_SERVER:
         server(message, False)
