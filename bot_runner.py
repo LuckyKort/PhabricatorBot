@@ -350,6 +350,7 @@ def get_project(message):
 def get_images(chat_id, ids):
     links = list()
     imgnames = list()
+    imgids = list()
     url = '{0}/api/file.search'.format(config.server(chat_id))
     data = {
         "api.token": config.phab_api(chat_id),
@@ -361,6 +362,7 @@ def get_images(chat_id, ids):
     result['result']['data'].reverse()
     for i in range(len(result['result']['data'])):
         if result['result']['data'][i]['fields']['name'] == "image.png":
+            imgids.append(result['result']['data'][i]['id'])
             links.append(result['result']['data'][i]['fields']['dataURI'])
 
     media = []
@@ -371,7 +373,7 @@ def get_images(chat_id, ids):
         open(filename, 'wb').write(r.content)
         media.append(InputMediaPhoto(open(filename, 'rb'), caption="Изображение " + str(link + 1)))
         imgnames.append(filename)
-    return {"imgnames": imgnames, "media": media}
+    return {"imgnames": imgnames, "imgids": imgids,  "media": media}
 
 
 @bot.message_handler(commands=['info'])
@@ -385,9 +387,9 @@ def get_info(message, command=True):
             if info is not None:
                 file_ids = re.findall(r'{F([\s\S]+?)}', info['desc'])
                 images = get_images(message.chat.id, file_ids)
-                replace_imgs = info['desc']
+                replace_imgs = info['desc'].replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
                 for id in range(len(images['imgnames'])):
-                    replace_imgs = re.sub(r'{F' + str(images['imgnames'][id]) + '}',
+                    replace_imgs = re.sub(r'{F' + str(images['imgids'][id]) + '}',
                                           '*(Изображение ' + str(id + 1) + ')*',
                                           replace_imgs)
                 replace_attach = re.sub(r'{F([\s\S]+?)}', '*(Вложение)*', replace_imgs)
