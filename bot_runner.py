@@ -351,6 +351,7 @@ def get_images(chat_id, ids):
     links = list()
     imgnames = list()
     imgids = list()
+    imglist = list()
     url = '{0}/api/file.search'.format(config.server(chat_id))
     data = {
         "api.token": config.phab_api(chat_id),
@@ -360,18 +361,22 @@ def get_images(chat_id, ids):
     r = requests.post(url, params=data, verify=False)
     result = r.json()
     result['result']['data'].reverse()
+    imgformats = {".png", ".jpg", ".jpeg", ".gif", ".tiff"}
     for i in range(len(result['result']['data'])):
-        imgids.append(result['result']['data'][i]['id'])
-        links.append(result['result']['data'][i]['fields']['dataURI'])
+        for imgformat in imgformats:
+            if result['result']['data'][i]['fields']['name'].endswith(imgformat):
+                imgids.append(result['result']['data'][i]['id'])
+                imgnames.append(result['result']['data'][i]['fields']['name'])
+                links.append(result['result']['data'][i]['fields']['dataURI'])
     media = []
     for link in range(len(links)):
         url = links[link]
         r = requests.get(url, allow_redirects=True, verify=False)
-        filename = '%s-image%s.png' % (chat_id, link)
+        filename = '%s-%s-%s' % (chat_id, link, imgnames[link])
         open(filename, 'wb').write(r.content)
         media.append(InputMediaPhoto(open(filename, 'rb'), caption="Изображение " + str(link + 1)))
-        imgnames.append(filename)
-    return {"imgnames": imgnames, "imgids": imgids,  "media": media}
+        imglist.append(filename)
+    return {"imglist": imglist, "imgids": imgids,  "media": media}
 
 
 @bot.message_handler(commands=['info'])
@@ -386,7 +391,7 @@ def get_info(message, command=True):
                 file_ids = re.findall(r'{F([\s\S]+?)}', info['desc'])
                 images = get_images(message.chat.id, file_ids)
                 replace_imgs = info['desc'].replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
-                for id in range(len(images['imgnames'])):
+                for id in range(len(images['imglist'])):
                     replace_imgs = re.sub(r'{F' + str(images['imgids'][id]) + '}',
                                           '*(Изображение ' + str(id + 1) + ')*',
                                           replace_imgs)
@@ -410,7 +415,7 @@ def get_info(message, command=True):
                                                                        args[0])
                 bot.send_message(message.chat.id, str_message, parse_mode='Markdown')
                 bot.send_media_group(message.chat.id, images['media'])
-                for img in images['imgnames']:
+                for img in images['imglist']:
                     if os.path.exists(img):
                         os.remove(img)
 
