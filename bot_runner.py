@@ -361,10 +361,8 @@ def get_images(chat_id, ids):
     result = r.json()
     result['result']['data'].reverse()
     for i in range(len(result['result']['data'])):
-        if result['result']['data'][i]['fields']['name'] == "image.png":
-            imgids.append(result['result']['data'][i]['id'])
-            links.append(result['result']['data'][i]['fields']['dataURI'])
-
+        imgids.append(result['result']['data'][i]['id'])
+        links.append(result['result']['data'][i]['fields']['dataURI'])
     media = []
     for link in range(len(links)):
         url = links[link]
