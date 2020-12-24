@@ -11,7 +11,7 @@ from time import strftime, localtime
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 
 # logger = telebot.logger
-# telebot.logger.setLevel(logging.DEBUG) # Outputs debug messages to console.
+# telebot.logger.setLevel(logging.DEBUG)
 
 CHAT_STATE_SET_SERVER = "set_server"
 CHAT_STATE_SET_PHABAPI = "set_phab_api"
@@ -391,20 +391,28 @@ def get_info(message, command=True):
                 file_ids = re.findall(r'{F([\s\S]+?)}', info['desc'])
                 images = get_images(message.chat.id, file_ids)
                 replace_imgs = (info['desc'].replace("_", "\\_")
-                                           .replace("*", "\\*")
-                                           .replace("[", "\\[")
-                                           .replace("`", "\\`"))
+                                            .replace("*", "\\*")
+                                            .replace("[", "\\[")
+                                            .replace("`", "\\`"))
+                projectstr = (info['projects'].replace("_", "\\_")
+                                              .replace("*", "\\*")
+                                              .replace("[", "\\[")
+                                              .replace("`", "\\`"))
                 for id in range(len(images['imglist'])):
                     replace_imgs = re.sub(r'{F' + str(images['imgids'][id]) + '}',
                                           '*(Изображение ' + str(id + 1) + ')*',
                                           replace_imgs)
                 replace_attach = re.sub(r'{F([\s\S]+?)}', '*(Вложение)*', replace_imgs)
+                result_desc = (replace_attach.replace("\\*\\*", "*")[0:1000] +
+                               "... *текст обрезан, полная версия по ссылке ниже*") if len(replace_attach) > 1000 else \
+                    replace_attach.replace("\\*\\*", "*")
                 str_message = ("\U0001F4CA *Задача Т%s:* %s \n\n"
                                "\U0001F4C5 *Дата создания:* %s \n\n"
                                "\U0001F4C8 *Приоритет:* %s \n\n"
                                "\U0001F4CC *Статус:* %s \n\n"
                                "\U0001F425 *Автор:* %s \n\n"
                                "\U0001F425 *Исполнитель:* %s \n\n"
+                               "\U0001F3E2 *Проекты:* %s \n\n"
                                "\U0001F4CB *Текст задачи:* \n%s \n\n"
                                "\U0001F449 [Открыть таск](%s/T%s)") % (args[0],
                                                                        info['name'],
@@ -413,10 +421,13 @@ def get_info(message, command=True):
                                                                        info['status'],
                                                                        info['author'],
                                                                        info['owner'],
-                                                                       replace_attach,
+                                                                       projectstr,
+                                                                       result_desc,
                                                                        config.server(message.chat.id),
                                                                        args[0])
+                bot.send_chat_action(message.chat.id, 'typing')
                 bot.send_message(message.chat.id, str_message, parse_mode='Markdown')
+                bot.send_chat_action(message.chat.id, 'upload_photo')
                 bot.send_media_group(message.chat.id, images['media'])
                 for img in images['imglist']:
                     if os.path.exists(img):
@@ -649,7 +660,6 @@ def callback_query(call):
         set_chat_state(None)
     elif call.data.startswith('info'):
         task_id = call.data.replace("info", "")
-        bot.delete_message(call.message.chat.id, call.message.message_id)
         call.message.text = task_id
         get_info(call.message, command=False)
     elif callback[0] == "settings":
