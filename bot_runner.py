@@ -393,40 +393,52 @@ def get_info(message, command=True):
                 replace_imgs = (info['desc'].replace("_", "\\_")
                                             .replace("*", "\\*")
                                             .replace("[", "\\[")
-                                            .replace("`", "\\`"))
+                                            .replace("`", "\\`")
+                                            .replace("|", "\n")
+                                            .replace(">", "")
+                                            .replace("\n\n", "\n")
+                                            .replace("\n\n\n", "\n"))
                 projectstr = (info['projects'].replace("_", "\\_")
                                               .replace("*", "\\*")
                                               .replace("[", "\\[")
                                               .replace("`", "\\`"))
+                namestr = (info['name'].replace("_", "\\_")
+                                           .replace("*", "\\*")
+                                           .replace("[", "\\[")
+                                           .replace("`", "\\`"))
                 for id in range(len(images['imglist'])):
                     replace_imgs = re.sub(r'{F' + str(images['imgids'][id]) + '}',
                                           '*(Изображение ' + str(id + 1) + ')*',
                                           replace_imgs)
                 replace_attach = re.sub(r'{F([\s\S]+?)}', '*(Вложение)*', replace_imgs)
-                result_desc = (replace_attach.replace("\\*\\*", "*")[0:1000] +
-                               "... *текст обрезан, полная версия по ссылке ниже*") if len(replace_attach) > 1000 else \
-                    replace_attach.replace("\\*\\*", "*")
+                result_desc = replace_attach.replace("\\*\\*", "*")
+                if len(result_desc) > 1000:
+                    result_desc = result_desc[0:1000]
+                    if result_desc.count('*') % 2 != 0:
+                        result_desc = result_desc + "*"
+                    result_desc = result_desc + "... *текст обрезан, полная версия по ссылке ниже*"
                 str_message = ("\U0001F4CA *Задача Т%s:* %s \n\n"
                                "\U0001F4C5 *Дата создания:* %s \n\n"
                                "\U0001F4C8 *Приоритет:* %s \n\n"
                                "\U0001F4CC *Статус:* %s \n\n"
                                "\U0001F425 *Автор:* %s \n\n"
                                "\U0001F425 *Исполнитель:* %s \n\n"
-                               "\U0001F3E2 *Проекты:* %s \n\n"
-                               "\U0001F4CB *Текст задачи:* \n%s \n\n"
-                               "\U0001F449 [Открыть таск](%s/T%s)") % (args[0],
-                                                                       info['name'],
-                                                                       info['created'].strftime("%d.%m.%Y %H:%M"),
-                                                                       info['priority'],
-                                                                       info['status'],
-                                                                       info['author'],
-                                                                       info['owner'],
-                                                                       projectstr,
-                                                                       result_desc,
-                                                                       config.server(message.chat.id),
-                                                                       args[0])
+                               "\U0001F3E2 *Теги:* %s \n\n"
+                               "\U0001F4CB *Описание:* \n%s \n\n") % (args[0],
+                                                                      namestr,
+                                                                      info['created'].strftime("%d.%m.%Y %H:%M"),
+                                                                      info['priority'],
+                                                                      info['status'],
+                                                                      info['author'],
+                                                                      info['owner'],
+                                                                      projectstr,
+                                                                      result_desc)
+                markup = InlineKeyboardMarkup()
+                markup.add(InlineKeyboardButton("Открыть задачу",
+                                                url="%s/T%s" % (config.server(message.chat.id), args[0])))
                 bot.send_chat_action(message.chat.id, 'typing')
-                bot.send_message(message.chat.id, str_message, parse_mode='Markdown')
+                print(str_message + "\n\n")
+                bot.send_message(message.chat.id, str_message, parse_mode='Markdown', reply_markup=markup)
                 bot.send_chat_action(message.chat.id, 'upload_photo')
                 bot.send_media_group(message.chat.id, images['media'])
                 for img in images['imglist']:

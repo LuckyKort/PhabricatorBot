@@ -11,12 +11,6 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from .config import Config
 
 
-def full_markup(task_id):
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("Полная информация о задаче", callback_data="info" + task_id))
-    return markup
-
-
 class TaskGetter:
     __config = None  # type: None or Config
     __stop_threads = False  # type: bool
@@ -29,6 +23,12 @@ class TaskGetter:
         self.__new_ids = []
         self.__sended_ids = []
         return
+
+    def full_markup(self, task_id):
+        markup = InlineKeyboardMarkup()
+        markup.add(InlineKeyboardButton("Полная информация", callback_data="info" + task_id),
+                   InlineKeyboardButton("Открыть задачу", url="%s/T%s" % (self.server, task_id)))
+        return markup
 
     @staticmethod
     def __timenow():
@@ -581,23 +581,19 @@ class TaskGetter:
                 resultstr = 'На борде <b>{0}</b> появился новый таск ' \
                             'с <b>{1}</b> приоритетом: \n\U0001F4CA <b>T{2} - {3}</b> \n' \
                             '\U0001F425 Инициатор: <b>{4}</b>\n' \
-                            '\U0001F425 Исполнитель: <b>{5}</b>\n' \
-                            '\n\U0001F449 <a href ="{6}/T{7}">Открыть таск</a>'.format(result['board'],
+                            '\U0001F425 Исполнитель: <b>{5}</b>\n'.format(result['board'],
                                                                                        result['priority'],
                                                                                        result['task_id'],
                                                                                        result['name'],
                                                                                        result['author'],
-                                                                                       result['owner'],
-                                                                                       self.server,
-                                                                                       result['task_id']
+                                                                                       result['owner']
                                                                                        )
                 TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML',
-                                              reply_markup=full_markup(result['task_id']))
+                                              reply_markup=self.full_markup(result['task_id']))
                 self.__new_ids.append(int(result['task_id']))
 
         elif act == "upd":
             def sendupd(head, body):
-                footer = '\n\U0001F449 <a href ="{0}/T{1}">Открыть таск</a>'.format(self.server, result['task_id'])
                 if res_dict[result['task_id']] > 1:
                     result_messages[result['task_id']]['message'].append(
                         "\n\U0001F4DD " + body[0].upper() + body[1:]
@@ -605,8 +601,8 @@ class TaskGetter:
                 else:
                     print(self.__timenow() + ': Для чата ' + str(self.name) +
                           ' обнаружен обновленный таск - T' + result['task_id'])
-                    TaskGetter.__bot.send_message(self.chat_id, head + body + footer, parse_mode='HTML',
-                                                  reply_markup=full_markup(result['task_id']))
+                    TaskGetter.__bot.send_message(self.chat_id, head + body, parse_mode='HTML',
+                                                  reply_markup=self.full_markup(result['task_id']))
 
             result_list = [res for res in results.values() if int(res['task_id']) not in self.__new_ids]
 
@@ -720,14 +716,11 @@ class TaskGetter:
                 print(TaskGetter.__timenow() + ': Для чата ' + str(self.name) +
                       ' обнаружен обновленный таск - T' + message['id'])
                 resultstr = '\U0001F4CA В таске <b>T{} - {}</b> произошли изменения:\n ' \
-                            '{} \n' \
-                            '\U0001F449 <a href ="{}/T{}">Открыть таск</a>'.format(message['id'],
-                                                                                   message['name'],
-                                                                                   messagestr,
-                                                                                   self.server,
-                                                                                   message['id'])
+                            '{} \n'.format(message['id'],
+                                           message['name'],
+                                           messagestr)
                 TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML',
-                                              reply_markup=full_markup(message['id']))
+                                              reply_markup=self.full_markup(message['id']))
 
     def __tasks_search(self):
         for board in self.boards:
