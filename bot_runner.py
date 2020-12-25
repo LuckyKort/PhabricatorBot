@@ -560,10 +560,6 @@ def callback_query(call):
         global state
         assert state is not None
         state[call.message.chat.id] = chat_state
-    try:
-        callback = ast.literal_eval(call.data)
-    except Exception as e:
-        callback = None
     if call.data == CHAT_STATE_SET_SERVER:
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, 'Введите адрес фабрикатора в формате <b>"https://some.adress"</b>:',
@@ -674,9 +670,15 @@ def callback_query(call):
         task_id = call.data.replace("info", "")
         call.message.text = task_id
         get_info(call.message, command=False)
-    elif callback[0] == "settings":
+    elif call.data.startswith('settings'):
+        setting = call.data.replace("settings", "")
         bot.delete_message(call.message.chat.id, call.message.message_id)
-        set_settings(call.message, callback[1])
+        set_settings(call.message, setting)
+        settings(call.message)
+    elif call.data.startswith('priority'):
+        setting = call.data.replace("priority", "")
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        set_settings(call.message, setting)
         settings(call.message)
 
 
@@ -706,23 +708,25 @@ def settings(message):
     settings_markup = InlineKeyboardMarkup()
     settings_markup.row_width = 1
     settings_markup.add(InlineKeyboardButton(newtask_emoji + " Новые таски",
-                                             callback_data='["settings", 1]'),
+                                             callback_data='settings1'),
                         InlineKeyboardButton(column_emoji + " Перемещения по колонкам",
-                                             callback_data='["settings", 2]'),
+                                             callback_data='settings2'),
                         InlineKeyboardButton(assign_emoji + " Изменение исполнителя",
-                                             callback_data='["settings", 3]'),
+                                             callback_data='settings3'),
                         InlineKeyboardButton(prior_emoji + " Изменение приоритета",
-                                             callback_data='["settings", 4]'),
-                        InlineKeyboardButton(status_emoji + " Изменение статуса",
-                                             callback_data='["settings", 6]'),
-                        InlineKeyboardButton(tags_emoji + " Изменение тегов",
-                                             callback_data='["settings", 7]'),
+                                             callback_data='settings4'),
                         InlineKeyboardButton(comm_emoji + " Новые комментарии",
-                                             callback_data='["settings", 5]'),
+                                             callback_data='settings5'),
+                        InlineKeyboardButton(status_emoji + " Изменение статуса",
+                                             callback_data='settings6'),
+                        InlineKeyboardButton(tags_emoji + " Изменение тегов",
+                                             callback_data='settings7'),
                         InlineKeyboardButton(cmit_emoji + " Новые коммиты",
-                                             callback_data='["settings", 8]'),
+                                             callback_data='settings8'),
                         InlineKeyboardButton(linked_emoji + " Связанные задачи",
-                                             callback_data='["settings", 9]'),
+                                             callback_data='settings9'),
+                        InlineKeyboardButton("Вернуться в главное меню",
+                                             callback_data=CHAT_STATE_PRIORITIES),
                         InlineKeyboardButton("Вернуться в главное меню",
                                              callback_data=CHAT_STATE_BACK)
                         )
@@ -736,6 +740,43 @@ def set_settings(message, setting):
         config.remove_from_settings(message.chat.id, setting)
     else:
         config.add_to_settings(message.chat.id, setting)
+
+
+def priorities(message):
+    wishlist_emoji = "\u2705" if 10 not in config.priorities(message.chat.id) else "\u274C"
+    low_emoji = "\u2705" if 25 not in config.priorities(message.chat.id) else "\u274C"
+    normal_emoji = "\u2705" if 50 not in config.priorities(message.chat.id) else "\u274C"
+    high_emoji = "\u2705" if 80 not in config.priorities(message.chat.id) else "\u274C"
+    triage_emoji = "\u2705" if 90 not in config.priorities(message.chat.id) else "\u274C"
+    unbreak_emoji = "\u2705" if 100 not in config.priorities(message.chat.id) else "\u274C"
+
+    priorities_markup = InlineKeyboardMarkup()
+    priorities_markup.row_width = 1
+    priorities_markup.add(InlineKeyboardButton(wishlist_emoji + " Wishlist",
+                                               callback_data='priorities10'),
+                          InlineKeyboardButton(low_emoji + " Низкий",
+                                               callback_data='priorities25'),
+                          InlineKeyboardButton(normal_emoji + " Средний",
+                                               callback_data='priorities50'),
+                          InlineKeyboardButton(high_emoji + " Высокий",
+                                               callback_data='priorities80'),
+                          InlineKeyboardButton(triage_emoji + " Срочный",
+                                               callback_data='priorities90'),
+                          InlineKeyboardButton(unbreak_emoji + " Наивысший",
+                                               callback_data='priorities100'),
+                          InlineKeyboardButton("Вернуться в главное меню",
+                                               callback_data=CHAT_STATE_BACK)
+                          )
+
+    bot.send_message(message.chat.id, "Это ваши текущие настройки приоритетов. Нажмите, чтобы переключить состояние.",
+                     reply_markup=priorities_markup)
+
+
+def set_priorities(message, priority):
+    if priority in config.priorities(message.chat.id):
+        config.remove_from_priorities(message.chat.id, priority)
+    else:
+        config.add_to_priorities(message.chat.id, priority)
 
 
 @bot.message_handler(commands=['where_apitoken'])

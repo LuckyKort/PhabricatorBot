@@ -88,6 +88,23 @@ class Config(dict):
         chat['settings'].remove(settings)
         self.dump()
 
+    def priorities(self, chat_id) -> list:
+        chat = self.chat(chat_id, False)
+        return chat.get('priorities', [])
+
+    def add_to_priorities(self, chat_id, priorities: list):
+        chat = self.chat(chat_id, False)
+        if 'priorities' not in chat:
+            chat['priorities'] = [priorities]
+        else:
+            chat['priorities'] += [priorities]
+        self.dump()
+
+    def remove_from_settings(self, chat_id, settings: list):
+        chat = self.chat(chat_id, False)
+        chat['settings'].remove(settings)
+        self.dump()
+
     def boards(self, chat_id) -> list:
         chat = self.chat(chat_id, False)
         return chat.get('boards', [])

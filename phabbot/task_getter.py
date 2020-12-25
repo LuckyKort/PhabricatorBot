@@ -100,6 +100,10 @@ class TaskGetter:
     def settings(self) -> list:
         return self.__chat_config.get('settings', [])
 
+    @property
+    def priorities(self) -> list:
+        return self.__chat_config.get('priorities', [])
+
     @boards.setter
     def boards(self, value: list):
         assert value is not None
@@ -313,7 +317,7 @@ class TaskGetter:
     def __getpriority(value):
         try:
             task_prior = {
-                10: ("Интересный", "интересным", "интересного"),
+                10: ("Whishlist", "wishlist", "wishlist"),
                 25: ("Низкий", "низким", "низкого"),
                 50: ("Средний", "средним", "среднего"),
                 80: ("Высокий", "высоким", "высокого"),
