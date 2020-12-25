@@ -364,7 +364,7 @@ def get_images(chat_id, ids):
     imgformats = {".png", ".jpg", ".jpeg", ".gif", ".tiff", ".bmp"}
     for i in range(len(result['result']['data'])):
         for imgformat in imgformats:
-            if result['result']['data'][i]['fields']['name'].endswith(imgformat):
+            if result['result']['data'][i]['fields']['name'].lower().endswith(imgformat):
                 imgids.append(result['result']['data'][i]['id'])
                 imgnames.append(result['result']['data'][i]['fields']['name'])
                 links.append(result['result']['data'][i]['fields']['dataURI'])
@@ -437,7 +437,6 @@ def get_info(message, command=True):
                 markup.add(InlineKeyboardButton("Открыть задачу",
                                                 url="%s/T%s" % (config.server(message.chat.id), args[0])))
                 bot.send_chat_action(message.chat.id, 'typing')
-                print(str_message + "\n\n")
                 bot.send_message(message.chat.id, str_message, parse_mode='Markdown', reply_markup=markup)
                 bot.send_chat_action(message.chat.id, 'upload_photo')
                 bot.send_media_group(message.chat.id, images['media'])
@@ -602,8 +601,8 @@ def callback_query(call):
                                                'Это может быть полезно, в случае если вы подписаны на задачи, но не'
                                                'хотите получать оповещения о событиях которые происходят, например, '
                                                'на борде который к вам не относится, но указан в задаче.\n'
-                                               'Например, вы менеджер, и не хотите получать оповещения о движении таска'
-                                               'на борде разработчиков. \n'
+                                               'Например, вы менеджер, и не хотите получать оповещения о движении '
+                                               'задачи на борде разработчиков. \n'
                                                '\n\U0001F648 Борды, перемещения по которым игнорируются: \n%s'
                                                '\n\U0001F648 Колонки, перемещения в которые игнорируются: \n%s'
                                                '\n\U0001F648 Пользователи, действия которых игнорируются: \n%s\n'
@@ -662,6 +661,9 @@ def callback_query(call):
     elif call.data == "settings":
         bot.delete_message(call.message.chat.id, call.message.message_id)
         settings(call.message)
+    elif call.data == "set_priorities":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        priorities(call.message)
     elif call.data == CHAT_STATE_BACK:
         bot.delete_message(call.message.chat.id, call.message.message_id)
         menu(call.message)
@@ -676,10 +678,10 @@ def callback_query(call):
         set_settings(call.message, setting)
         settings(call.message)
     elif call.data.startswith('priority'):
-        setting = call.data.replace("priority", "")
+        priority = call.data.replace("priority", "")
         bot.delete_message(call.message.chat.id, call.message.message_id)
-        set_settings(call.message, setting)
-        settings(call.message)
+        set_priorities(call.message, priority)
+        priorities(call.message)
 
 
 @bot.message_handler(commands=['server'])
@@ -707,7 +709,7 @@ def settings(message):
 
     settings_markup = InlineKeyboardMarkup()
     settings_markup.row_width = 1
-    settings_markup.add(InlineKeyboardButton(newtask_emoji + " Новые таски",
+    settings_markup.add(InlineKeyboardButton(newtask_emoji + " Новые задачи",
                                              callback_data='settings1'),
                         InlineKeyboardButton(column_emoji + " Перемещения по колонкам",
                                              callback_data='settings2'),
@@ -725,8 +727,8 @@ def settings(message):
                                              callback_data='settings8'),
                         InlineKeyboardButton(linked_emoji + " Связанные задачи",
                                              callback_data='settings9'),
-                        InlineKeyboardButton("Вернуться в главное меню",
-                                             callback_data=CHAT_STATE_PRIORITIES),
+                        InlineKeyboardButton("Настройки приоритетов",
+                                             callback_data='set_priorities'),
                         InlineKeyboardButton("Вернуться в главное меню",
                                              callback_data=CHAT_STATE_BACK)
                         )
@@ -736,7 +738,7 @@ def settings(message):
 
 
 def set_settings(message, setting):
-    if setting in config.settings(message.chat.id):
+    if int(setting) in config.settings(message.chat.id):
         config.remove_from_settings(message.chat.id, setting)
     else:
         config.add_to_settings(message.chat.id, setting)
@@ -753,17 +755,19 @@ def priorities(message):
     priorities_markup = InlineKeyboardMarkup()
     priorities_markup.row_width = 1
     priorities_markup.add(InlineKeyboardButton(wishlist_emoji + " Wishlist",
-                                               callback_data='priorities10'),
+                                               callback_data='priority10'),
                           InlineKeyboardButton(low_emoji + " Низкий",
-                                               callback_data='priorities25'),
+                                               callback_data='priority25'),
                           InlineKeyboardButton(normal_emoji + " Средний",
-                                               callback_data='priorities50'),
+                                               callback_data='priority50'),
                           InlineKeyboardButton(high_emoji + " Высокий",
-                                               callback_data='priorities80'),
+                                               callback_data='priority80'),
                           InlineKeyboardButton(triage_emoji + " Срочный",
-                                               callback_data='priorities90'),
+                                               callback_data='priority90'),
                           InlineKeyboardButton(unbreak_emoji + " Наивысший",
-                                               callback_data='priorities100'),
+                                               callback_data='priority100'),
+                          InlineKeyboardButton("Вернуться в настройки",
+                                               callback_data='settings'),
                           InlineKeyboardButton("Вернуться в главное меню",
                                                callback_data=CHAT_STATE_BACK)
                           )
@@ -773,7 +777,7 @@ def priorities(message):
 
 
 def set_priorities(message, priority):
-    if priority in config.priorities(message.chat.id):
+    if int(priority) in config.priorities(message.chat.id):
         config.remove_from_priorities(message.chat.id, priority)
     else:
         config.add_to_priorities(message.chat.id, priority)
@@ -950,8 +954,8 @@ def unset_ignored_columns(message):
 @bot.message_handler(commands=['last_check'])
 def last_check(message):
     bot.send_message(message.chat.id,
-                     "Время последней проверки на наличие новых тасков: \n%s\n"
-                     "Время последней проверки на наличие обновленных тасков: \n%s" % (
+                     "Время последней проверки на наличие новых задач: \n%s\n"
+                     "Время последней проверки на наличие обновленных задач: \n%s" % (
                          getptojectname(message.chat.id, "ts", config.last_new_check(message.chat.id)),
                          getptojectname(message.chat.id, "ts", config.last_update_check(message.chat.id))),
                      parse_mode='Markdown')

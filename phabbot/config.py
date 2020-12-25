@@ -75,34 +75,34 @@ class Config(dict):
         chat = self.chat(chat_id, False)
         return chat.get('settings', [])
 
-    def add_to_settings(self, chat_id, settings: list):
+    def add_to_settings(self, chat_id, settings: str):
         chat = self.chat(chat_id, False)
         if 'settings' not in chat:
-            chat['settings'] = [settings]
+            chat['settings'] = [int(settings)]
         else:
-            chat['settings'] += [settings]
+            chat['settings'] += [int(settings)]
         self.dump()
 
-    def remove_from_settings(self, chat_id, settings: list):
+    def remove_from_settings(self, chat_id, settings: str):
         chat = self.chat(chat_id, False)
-        chat['settings'].remove(settings)
+        chat['settings'].remove(int(settings))
         self.dump()
 
     def priorities(self, chat_id) -> list:
         chat = self.chat(chat_id, False)
         return chat.get('priorities', [])
 
-    def add_to_priorities(self, chat_id, priorities: list):
+    def add_to_priorities(self, chat_id, priorities: str):
         chat = self.chat(chat_id, False)
         if 'priorities' not in chat:
-            chat['priorities'] = [priorities]
+            chat['priorities'] = [int(priorities)]
         else:
-            chat['priorities'] += [priorities]
+            chat['priorities'] += [int(priorities)]
         self.dump()
 
-    def remove_from_settings(self, chat_id, settings: list):
+    def remove_from_priorities(self, chat_id, priorities: str):
         chat = self.chat(chat_id, False)
-        chat['settings'].remove(settings)
+        chat['priorities'].remove(int(priorities))
         self.dump()
 
     def boards(self, chat_id) -> list:
