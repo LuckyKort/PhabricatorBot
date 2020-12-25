@@ -488,14 +488,14 @@ def ignore_markup():
                InlineKeyboardButton("Удалить колонки", callback_data=CHAT_STATE_REMOVE_IGNORED_COLUMS),
                InlineKeyboardButton("Добавить юзеров", callback_data=CHAT_STATE_IGNORED_USERS),
                InlineKeyboardButton("Удалить юзеров", callback_data=CHAT_STATE_REMOVE_IGNORED_USERS),
-               InlineKeyboardButton("Вернуться в меню", callback_data=CHAT_STATE_BACK)
+               InlineKeyboardButton("Вернуться в главное меню", callback_data=CHAT_STATE_BACK)
                )
     return markup
 
 
 def back_markup():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("Вернуться в меню", callback_data=CHAT_STATE_BACK))
+    markup.add(InlineKeyboardButton("Вернуться в главное меню", callback_data=CHAT_STATE_BACK))
     return markup
 
 
@@ -856,15 +856,20 @@ def boards(message, command=True):
 
 
 def unset_boards(message):
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 1
+    markup.add(InlineKeyboardButton("Ввести другой номер", callback_data=CHAT_STATE_REMOVE_BOARDS),
+               InlineKeyboardButton("Вернуться в главное меню", callback_data=CHAT_STATE_BACK)
+               )
     if not message.text.isnumeric():
-        bot.send_message(message.chat.id, "\u274C Введите номер борда", reply_markup=back_markup())
+        bot.send_message(message.chat.id, "\u274C Введите номер борда", reply_markup=markup)
         return
     if (int(message.text) > len(config.boards(message.chat.id))) or (int(message.text) < 0):
-        bot.send_message(message.chat.id, "\u274C Борда под таким номером нет", reply_markup=back_markup())
+        bot.send_message(message.chat.id, "\u274C Борда под таким номером нет", reply_markup=markup)
         return
     phid = config.boards(message.chat.id)[int(message.text) - 1]
     config.unset_boards(message.chat.id, phid)
-    bot.send_message(message.chat.id, "\u2705 Борд удален из списка", reply_markup=back_markup())
+    bot.send_message(message.chat.id, "\u2705 Борд удален из списка", reply_markup=markup)
 
 
 @bot.message_handler(commands=['ignored_boards'])
