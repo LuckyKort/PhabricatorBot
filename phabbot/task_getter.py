@@ -7,7 +7,7 @@ import requests
 import schedule
 import telebot
 import time
-
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from .config import Config
 
 
@@ -23,6 +23,12 @@ class TaskGetter:
         self.__new_ids = []
         self.__sended_ids = []
         return
+
+    def full_markup(self, task_id):
+        markup = InlineKeyboardMarkup()
+        markup.add(InlineKeyboardButton("Полная информация", callback_data="info" + task_id),
+                   InlineKeyboardButton("Открыть задачу", url="%s/T%s" % (self.server, task_id)))
+        return markup
 
     @staticmethod
     def __timenow():
@@ -183,21 +189,37 @@ class TaskGetter:
                 data = {
                     "api.token": self.phab_api,
                     "constraints[ids][0]": value,
+                    "attachments[projects]": "true"
                 }
                 r = requests.post(url, params=data, verify=False)
                 json_dict = r.json()
                 if len(json_dict['result']['data']) > 0:
                     name = json_dict['result']['data'][0]['fields']['name']
                     desc = json_dict['result']['data'][0]['fields']['description']['raw']
+                    if desc is None:
+                        desc = "Не установлен"
                     priority = self.__getpriority(json_dict['result']['data'][0]['fields']['priority']['value'])[0]
                     status = self.__getstatus(json_dict['result']['data'][0]['fields']['status']['value'])
                     author = self.__whois(json_dict['result']['data'][0]['fields']['authorPHID'])['realname']
                     owner = self.__whois(json_dict['result']['data'][0]['fields']['ownerPHID'])['realname']
+                    if owner is None:
+                        owner = "Не установлен"
                     created = datetime.fromtimestamp(json_dict['result']['data'][0]['fields']['dateCreated'])
+                    projects_phids = json_dict['result']['data'][0]['attachments']['projects']['projectPHIDs']
+                    projects_list = list()
+                    for project in projects_phids:
+                        projectsumm = self.__getproject(project, "id")
+                        projectstr = ("%s (%s)" % (projectsumm['project'], projectsumm['board'])
+                                      ) if projectsumm['project'] is not None else projectsumm['board']
+                        projects_list.append(projectstr)
+                    projects = ", ".join(projects_list)
+                    if projects is None:
+                        projects = "Не установлены"
                     summary = {
                                   "name": name,
                                   "desc": desc,
                                   "priority": priority,
+                                  "projects": projects,
                                   "status": status,
                                   "author": author,
                                   "owner": owner,
@@ -295,8 +317,8 @@ class TaskGetter:
                 25: ("Низкий", "низким", "низкого"),
                 50: ("Средний", "средним", "среднего"),
                 80: ("Высокий", "высоким", "высокого"),
-                90: ("Требующий уточнения", "требующим уточнения", "требущего уточнения"),
-                100: ("Срочный", "срочным", "срочного")
+                90: ("Срочный", "срочным", "срочного"),
+                100: ("Наивысший", "наивысшим", "наивысшего")
             }.get(value, ("Неопределенный", "неопределенным", "неопределенного"))
             return task_prior
         except Exception as e:
@@ -557,23 +579,21 @@ class TaskGetter:
                 print(TaskGetter.__timenow() + ': Для чата ' + str(self.name) +
                       ' обнаружен новый таск - T' + str(result['task_id']))
                 resultstr = 'На борде <b>{0}</b> появился новый таск ' \
-                            'с <b>{1}</b> приоритетом: \n\U0001F4CA <b>{2}</b> \n' \
-                            '\U0001F425 Инициатор: <b>{3}</b>\n' \
-                            '\U0001F425 Исполнитель: <b>{4}</b>\n' \
-                            '\n\U0001F449 <a href ="{5}/T{6}">Открыть таск</a>'.format(result['board'],
+                            'с <b>{1}</b> приоритетом: \n\U0001F4CA <b>T{2} - {3}</b> \n' \
+                            '\U0001F425 Инициатор: <b>{4}</b>\n' \
+                            '\U0001F425 Исполнитель: <b>{5}</b>\n'.format(result['board'],
                                                                                        result['priority'],
+                                                                                       result['task_id'],
                                                                                        result['name'],
                                                                                        result['author'],
-                                                                                       result['owner'],
-                                                                                       self.server,
-                                                                                       result['task_id']
+                                                                                       result['owner']
                                                                                        )
-                TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML')
+                TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML',
+                                              reply_markup=self.full_markup(result['task_id']))
                 self.__new_ids.append(int(result['task_id']))
 
         elif act == "upd":
             def sendupd(head, body):
-                footer = '\n\U0001F449 <a href ="{0}/T{1}">Открыть таск</a>'.format(self.server, result['task_id'])
                 if res_dict[result['task_id']] > 1:
                     result_messages[result['task_id']]['message'].append(
                         "\n\U0001F4DD " + body[0].upper() + body[1:]
@@ -581,7 +601,8 @@ class TaskGetter:
                 else:
                     print(self.__timenow() + ': Для чата ' + str(self.name) +
                           ' обнаружен обновленный таск - T' + result['task_id'])
-                    TaskGetter.__bot.send_message(self.chat_id, head + body + footer, parse_mode='HTML')
+                    TaskGetter.__bot.send_message(self.chat_id, head + body, parse_mode='HTML',
+                                                  reply_markup=self.full_markup(result['task_id']))
 
             result_list = [res for res in results.values() if int(res['task_id']) not in self.__new_ids]
 
@@ -604,7 +625,7 @@ class TaskGetter:
                         result_messages[result['task_id']]['message'] = []
 
                 if result['action'] == "reassign":
-                    headstr = '\U0001F4CA В таске <b>{0}</b> '.format(result['name'])
+                    headstr = '\U0001F4CA В таске <b>T{} - {}</b> '.format(result['task_id'], result['name'])
                     resultstr = 'был изменен исполнитель: \n' \
                                 '\U0001F425 Предыдущий исполнитель: <b>{0}</b>\n' \
                                 '\U0001F425 Новый исполнитель: <b>{1}</b>\n'.format(result['oldowner'],
@@ -615,7 +636,7 @@ class TaskGetter:
 
                     projstr = result['project'] is not None and (result['project'] + " - ") or ""
 
-                    headstr = '\U0001F4CA Таск <b>{0}</b> '.format(result['name'])
+                    headstr = '\U0001F4CA Таск <b>T{} - {}</b> '.format(result['task_id'], result['name'])
                     resultstr = 'перемещен в колонку ' \
                                 '<b>{0}</b> на борде <b>{1}{2}</b>\n'.format(result['column'],
                                                                              projstr,
@@ -624,7 +645,7 @@ class TaskGetter:
                     sendupd(headstr, resultstr)
 
                 if result['action'] == "priority":
-                    headstr = '\U0001F4CA В таске <b>{0}</b> '.format(result['name'])
+                    headstr = '\U0001F4CA В таске <b>T{} - {}</b> '.format(result['task_id'], result['name'])
                     resultstr = '{0} приоритет ' \
                                 'с <b>{1}</b> до <b>{2}</b>\n'.format(result['subject'],
                                                                       result['old_prior'],
@@ -643,22 +664,22 @@ class TaskGetter:
                     if (result['new_value'] in result['closed_statuses'] and result['old_value'] in
                         result['closed_statuses']) or (result['new_value'] not in result['closed_statuses'] and
                                                        result['old_value'] not in result['closed_statuses']):
-                        headstr = '\U0001F4CA В таске <b>{0}</b> '.format(result['name'])
+                        headstr = '\U0001F4CA В таске <b>T{} - {}</b> '.format(result['task_id'], result['name'])
                         resultstr = 'изменился статус с <b>{0}</b> на <b>{1}</b>\n'.format(result['rus_old_value'],
                                                                                            result['rus_new_value'])
 
                     elif result['new_value'] in result['closed_statuses'] and \
                             result['old_value'] not in result['closed_statuses']:
-                        headstr = '\U0001F4CA Таск <b>{0}</b> '.format(result['name'])
+                        headstr = '\U0001F4CA Таск <b>T{} - {}</b> '.format(result['task_id'], result['name'])
                         resultstr = 'закрыт со статусом <b>{0}</b> \n'.format(result['rus_new_value'])
 
                     elif result['new_value'] not in result['closed_statuses'] and \
                             result['old_value'] in result['closed_statuses']:
-                        headstr = '\U0001F4CA Таск <b>{0}</b> '.format(result['name'])
+                        headstr = '\U0001F4CA Таск <b>T{} - {}</b> '.format(result['task_id'], result['name'])
                         resultstr = 'переоткрыт со статусом <b>{0}</b> \n'.format(result['rus_new_value'])
 
                     else:
-                        headstr = '\U0001F4CA В таске <b>{0}</b> '.format(result['name'])
+                        headstr = '\U0001F4CA В таске <b>T{} - {}</b> '.format(result['task_id'], result['name'])
                         resultstr = 'изменился статус с <b>{0}</b> на <b>{1}</b>\n'.format(result['rus_old_value'],
                                                                                            result['rus_new_value'])
 
@@ -666,7 +687,7 @@ class TaskGetter:
 
                 if result['action'] == "edge":
                     if len(result['added']) > 0 or len(result['removed']) > 0:
-                        headstr = '\U0001F4CA В таске <b>{0}</b> '.format(result['name'])
+                        headstr = '\U0001F4CA В таске <b>T{} - {}</b> '.format(result['task_id'], result['name'])
                         added_str = str()
                         removed_str = str()
                         subaction_word = {
@@ -694,13 +715,12 @@ class TaskGetter:
                     messagestr += actions
                 print(TaskGetter.__timenow() + ': Для чата ' + str(self.name) +
                       ' обнаружен обновленный таск - T' + message['id'])
-                resultstr = '\U0001F4CA В таске <b>{0}</b> произошли изменения:\n ' \
-                            '{1} \n' \
-                            '\U0001F449 <a href ="{2}/T{3}">Открыть таск</a>'.format(message['name'],
-                                                                                     messagestr,
-                                                                                     self.server,
-                                                                                     message['id'])
-                TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML')
+                resultstr = '\U0001F4CA В таске <b>T{} - {}</b> произошли изменения:\n ' \
+                            '{} \n'.format(message['id'],
+                                           message['name'],
+                                           messagestr)
+                TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML',
+                                              reply_markup=self.full_markup(message['id']))
 
     def __tasks_search(self):
         for board in self.boards:

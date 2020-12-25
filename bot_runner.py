@@ -11,7 +11,7 @@ from time import strftime, localtime
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 
 # logger = telebot.logger
-# telebot.logger.setLevel(logging.DEBUG) # Outputs debug messages to console.
+# telebot.logger.setLevel(logging.DEBUG)
 
 CHAT_STATE_SET_SERVER = "set_server"
 CHAT_STATE_SET_PHABAPI = "set_phab_api"
@@ -361,7 +361,7 @@ def get_images(chat_id, ids):
     r = requests.post(url, params=data, verify=False)
     result = r.json()
     result['result']['data'].reverse()
-    imgformats = {".png", ".jpg", ".jpeg", ".gif", ".tiff"}
+    imgformats = {".png", ".jpg", ".jpeg", ".gif", ".tiff", ".bmp"}
     for i in range(len(result['result']['data'])):
         for imgformat in imgformats:
             if result['result']['data'][i]['fields']['name'].endswith(imgformat):
@@ -390,30 +390,56 @@ def get_info(message, command=True):
             if info is not None:
                 file_ids = re.findall(r'{F([\s\S]+?)}', info['desc'])
                 images = get_images(message.chat.id, file_ids)
-                replace_imgs = info['desc'].replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
+                replace_imgs = (info['desc'].replace("_", "\\_")
+                                            .replace("*", "\\*")
+                                            .replace("[", "\\[")
+                                            .replace("`", "\\`")
+                                            .replace("|", "\n")
+                                            .replace(">", "")
+                                            .replace("\n\n", "\n")
+                                            .replace("\n\n\n", "\n"))
+                projectstr = (info['projects'].replace("_", "\\_")
+                                              .replace("*", "\\*")
+                                              .replace("[", "\\[")
+                                              .replace("`", "\\`"))
+                namestr = (info['name'].replace("_", "\\_")
+                                           .replace("*", "\\*")
+                                           .replace("[", "\\[")
+                                           .replace("`", "\\`"))
                 for id in range(len(images['imglist'])):
                     replace_imgs = re.sub(r'{F' + str(images['imgids'][id]) + '}',
                                           '*(Изображение ' + str(id + 1) + ')*',
                                           replace_imgs)
                 replace_attach = re.sub(r'{F([\s\S]+?)}', '*(Вложение)*', replace_imgs)
+                result_desc = replace_attach.replace("\\*\\*", "*")
+                if len(result_desc) > 1000:
+                    result_desc = result_desc[0:1000]
+                    if result_desc.count('*') % 2 != 0:
+                        result_desc = result_desc + "*"
+                    result_desc = result_desc + "... *текст обрезан, полная версия по ссылке ниже*"
                 str_message = ("\U0001F4CA *Задача Т%s:* %s \n\n"
                                "\U0001F4C5 *Дата создания:* %s \n\n"
                                "\U0001F4C8 *Приоритет:* %s \n\n"
                                "\U0001F4CC *Статус:* %s \n\n"
                                "\U0001F425 *Автор:* %s \n\n"
                                "\U0001F425 *Исполнитель:* %s \n\n"
-                               "\U0001F4CB *Текст задачи:* \n%s \n\n"
-                               "\U0001F449 [Открыть таск](%s/T%s)") % (args[0],
-                                                                       info['name'],
-                                                                       info['created'].strftime("%d.%m.%Y %H:%M"),
-                                                                       info['priority'],
-                                                                       info['status'],
-                                                                       info['author'],
-                                                                       info['owner'],
-                                                                       replace_attach,
-                                                                       config.server(message.chat.id),
-                                                                       args[0])
-                bot.send_message(message.chat.id, str_message, parse_mode='Markdown')
+                               "\U0001F3E2 *Теги:* %s \n\n"
+                               "\U0001F4CB *Описание:* \n%s \n\n") % (args[0],
+                                                                      namestr,
+                                                                      info['created'].strftime("%d.%m.%Y %H:%M"),
+                                                                      info['priority'],
+                                                                      info['status'],
+                                                                      info['author'],
+                                                                      info['owner'],
+                                                                      projectstr,
+                                                                      result_desc)
+                markup = InlineKeyboardMarkup()
+                markup.add(InlineKeyboardButton("Открыть задачу",
+                                                url="%s/T%s" % (config.server(message.chat.id), args[0])))
+                bot.send_chat_action(message.chat.id, 'typing')
+                print(str_message + "\n\n")
+                bot.send_message(message.chat.id, str_message, parse_mode='Markdown', reply_markup=markup)
+                bot.send_chat_action(message.chat.id, 'upload_photo')
                 bot.send_media_group(message.chat.id, images['media'])
                 for img in images['imglist']:
                     if os.path.exists(img):
@@ -646,7 +672,6 @@ def callback_query(call):
         set_chat_state(None)
     elif call.data.startswith('info'):
         task_id = call.data.replace("info", "")
-        bot.delete_message(call.message.chat.id, call.message.message_id)
         call.message.text = task_id
         get_info(call.message, command=False)
     elif callback[0] == "settings":
