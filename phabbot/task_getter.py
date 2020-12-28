@@ -29,7 +29,7 @@ class TaskGetter:
 
     def full_markup(self, task_id):
         markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("Полная информация", callback_data="info" + task_id),
+        markup.add(InlineKeyboardButton("Полная информация", callback_data="info" + str(task_id)),
                    InlineKeyboardButton("Открыть задачу", url="%s/T%s" % (self.server, task_id)))
         return markup
 
@@ -351,7 +351,7 @@ class TaskGetter:
                            "inprogress": "В работе",
                            "stalled": "Затянут",
                            "complete": "Завершен"
-            }.get(value, "неопределенный")
+                           }.get(value, "неопределенный")
             return task_status
         except Exception as e:
             print('При получении статуса произошла ошибка: ', e)
@@ -400,7 +400,6 @@ class TaskGetter:
 
             elif act == "upd":
                 upd_tasks = {}
-                curr = 0
                 if len(json_dict['result']['data']) > 0:
                     for i in range(len(json_dict['result']['data'])):
                         task_id = json_dict['result']['data'][i]['id']
@@ -493,11 +492,11 @@ class TaskGetter:
                             if 5 not in self.settings:
                                 task_id = task['result'][curr_id][j]['taskID']
                                 if task['result'][curr_id][j]['comments'] is not None:
-                                    replace_attach = re.sub(r'{([\s\S]+?)}', '[Вложение]',
+                                    replace_attach = re.sub(r'{([\s\S]+?)}', '(Вложение)',
                                                             task['result'][curr_id][j]['comments'])
                                     quote_author = re.findall(r'@(.*?)\s', replace_attach)
-                                    linktext = re.findall(r'\[\[.*\|\s(.*?)\]\]', replace_attach)
-                                    replace_links = re.sub(r'\[\[(.*?)\]\]',
+                                    linktext = re.findall(r'\[\[.*\|\s(.*?)]]', replace_attach)
+                                    replace_links = re.sub(r'\[\[(.*?)]]',
                                                            linktext[0] if len(linktext) > 0
                                                            else "ссылка", replace_attach)
                                     comment = re.sub(r'^(^>).*', 'Цитата\n> : ' +
@@ -533,55 +532,52 @@ class TaskGetter:
                                                          }
                                 curr_num += 1
                         if task['result'][curr_id][j]['transactionType'] == "core:edge":
-                                task_id = task['result'][curr_id][j]['taskID']
-                                new_values = task['result'][curr_id][j]['newValue']
-                                old_values = task['result'][curr_id][j]['oldValue']
-                                added = list()
-                                removed = list()
-                                subaction = None
-                                for value in new_values:
-                                    if 7 not in self.settings:
-                                        if value.split("-")[1] == "PROJ":
-                                            subaction = "proj"
-                                            board = self.__getproject(value, "id")
-                                            added.append("<b>%s%s</b>" % (board['project'] + " - " if
-                                                                          board['project'] is not None
-                                                                          else "", board['board']))
-                                    if 8 not in self.settings:
-                                        if value.split("-")[1] == "CMIT":
-                                            subaction = "cmit"
-                                            commit = self.__getcommit(value)
-                                            added.append("<b>%s</b>" % commit['message'])
-                                    if 9 not in self.settings:
-                                        if value.split("-")[1] == "TASK":
-                                            subaction = "task"
-                                            taskname = self.__gettaskname(value, "phid")
-                                            added.append("<a href=\"%s/T%s\">%s</a>" % (self.server,
-                                                                                        taskname['id'],
-                                                                                        taskname['name']))
-                                for value in old_values:
-                                    if 7 not in self.settings:
-                                        if value.split("-")[1] == "PROJ":
-                                            subaction = "proj"
-                                            board = self.__getproject(value, "id")
-                                            removed.append("<b>%s%s</b>" % (board['project'] + " - " if
-                                                                            board['project'] is not None
-                                                                            else "", board['board']))
-                                    if 9 not in self.settings:
-                                        if value.split("-")[1] == "TASK":
-                                            subaction = "task"
-                                            taskname = self.__gettaskname(value, "phid")
-                                            removed.append("<a href=\"%s/T%s\">%s</a>" % (self.server,
-                                                                                          taskname['id'],
-                                                                                          taskname['name']))
-                                if subaction is not None:
-                                    upd_summary[curr_num] = {"action": "edge",
-                                                             "subaction": subaction,
-                                                             "name": name['name'],
-                                                             "task_id": task_id,
-                                                             "added": added,
-                                                             "removed": removed}
-                                    curr_num += 1
+                            task_id = task['result'][curr_id][j]['taskID']
+                            new_values = task['result'][curr_id][j]['newValue']
+                            old_values = task['result'][curr_id][j]['oldValue']
+                            added = list()
+                            removed = list()
+                            subaction = None
+                            for value in new_values:
+                                if 7 not in self.settings and value.split("-")[1] == "PROJ":
+                                    subaction = "proj"
+                                    board = self.__getproject(value, "id")
+                                    added.append("<b>%s%s</b>" % (board['project'] + " - " if
+                                                                  board['project'] is not None
+                                                                  else "", board['board']))
+                                if 8 not in self.settings and value.split("-")[1] == "CMIT":
+                                    subaction = "cmit"
+                                    commit = self.__getcommit(value)
+                                    added.append("<b>%s</b>" % commit['message'])
+                                if 9 not in self.settings and value.split("-")[1] == "TASK":
+                                    subaction = "task"
+                                    taskname = self.__gettaskname(value, "phid")
+                                    added.append("<a href=\"%s/T%s\">%s</a>" % (self.server,
+                                                                                taskname['id'],
+                                                                                taskname['name']))
+                            for value in old_values:
+                                if 7 not in self.settings:
+                                    if value.split("-")[1] == "PROJ":
+                                        subaction = "proj"
+                                        board = self.__getproject(value, "id")
+                                        removed.append("<b>%s%s</b>" % (board['project'] + " - " if
+                                                                        board['project'] is not None
+                                                                        else "", board['board']))
+                                if 9 not in self.settings:
+                                    if value.split("-")[1] == "TASK":
+                                        subaction = "task"
+                                        taskname = self.__gettaskname(value, "phid")
+                                        removed.append("<a href=\"%s/T%s\">%s</a>" % (self.server,
+                                                                                      taskname['id'],
+                                                                                      taskname['name']))
+                            if subaction is not None:
+                                upd_summary[curr_num] = {"action": "edge",
+                                                         "subaction": subaction,
+                                                         "name": name['name'],
+                                                         "task_id": task_id,
+                                                         "added": added,
+                                                         "removed": removed}
+                                curr_num += 1
                 if len(upd_summary) > 0:
                     return upd_summary
                 else:
@@ -604,12 +600,12 @@ class TaskGetter:
                             'с <b>{1}</b> приоритетом: \n\U0001F4CA <b>T{2} - {3}</b> \n' \
                             '\U0001F425 Инициатор: <b>{4}</b>\n' \
                             '\U0001F425 Исполнитель: <b>{5}</b>\n'.format(result['board'],
-                                                                                       result['priority'],
-                                                                                       result['task_id'],
-                                                                                       result['name'],
-                                                                                       result['author'],
-                                                                                       result['owner']
-                                                                                       )
+                                                                          result['priority'],
+                                                                          result['task_id'],
+                                                                          result['name'],
+                                                                          result['author'],
+                                                                          result['owner']
+                                                                          )
                 TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML',
                                               reply_markup=self.full_markup(result['task_id']))
                 self.__new_ids.append(int(result['task_id']))
@@ -718,7 +714,8 @@ class TaskGetter:
                         }.get(result['subaction'], None)
                         if len(result['added']) > 0:
                             if len(result['added']) == 1:
-                                added_str = 'добавлен %s: %s' % (subaction_word[0], ', '.join(result['added']))
+                                added = "добавлена" if result['subaction'] == "task" else "добавлен"
+                                added_str = '%s %s: %s' % (added, subaction_word[0], ', '.join(result['added']))
                             else:
                                 added_str = 'добавлены %s: %s' % (subaction_word[1], ', '.join(result['added']))
                         if len(result['removed']) > 0:

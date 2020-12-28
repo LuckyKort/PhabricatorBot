@@ -24,6 +24,7 @@ CHAT_STATE_SET_IGNORED_COLUMNS = "set_ignored_columns"
 CHAT_STATE_REMOVE_IGNORED_USERS = "remove_ignored_users"
 CHAT_STATE_REMOVE_IGNORED_COLUMS = "remove_ignored_columns"
 CHAT_STATE_IGNORED_USERS = "set_ignored_users"
+CHAT_STATE_GET_PROJECT_ID = "get_project_id"
 CHAT_STATE_BACK = "back"
 
 
@@ -181,7 +182,8 @@ def checkconfig(chatid, act, skip=None):
                                              "бордов которые необходимо мониторить "
                                              "в главном меню (/menu) "
                                              "\nДля того, чтобы узнать ID борда "
-                                             "введите команду /project_id Название", parse_mode='HTML')
+                                             "введите команду пройдите в меню "
+                                             "\"Борды\" - \"Узнать PHID\"", parse_mode='HTML')
                 return False
         try:
             url = config.get('server') + '/api/user.whoami'
@@ -309,11 +311,15 @@ def getusername(chatid, phids):
 
 
 @bot.message_handler(commands=['project_id'])
-def get_project(message):
+def get_project(message, command=True):
     if checkconfig(message.chat.id, "check", "boards"):
-        args = __extract_args(message.text)
+        markup = InlineKeyboardMarkup()
+        markup.row_width = 1
+        markup.add(InlineKeyboardButton("Ввести другое название", callback_data='project_id'),
+                   InlineKeyboardButton("Вернуться в главное меню", callback_data=CHAT_STATE_BACK)
+                   )
+        args = __extract_args(message.text) if command else message.text
         if args is not None:
-            args = ' '.join(args)
             url = '{0}/api/project.search'.format(config.server(message.chat.id))
             data = {
                 "api.token": config.phab_api(message.chat.id),
@@ -338,13 +344,14 @@ def get_project(message):
                                       "") + name.replace("*", "'")
                         resultstr += "%s. *%s:* `%s`\n" % (count, resultname, phid)
                         count += 1
-                footer = "\n\nВведите этот PHID в главном меню в разделе *\"Борды\"* или в меню *\"Исключения\"*"
+                footer = "\nСкопируйте этот PHID и введите его в главном меню в " \
+                         "разделе *\"Борды\"* или в меню *\"Исключения\"*"
                 bot.send_message(message.chat.id, resultstr + footer, parse_mode='Markdown',
-                                 reply_markup=back_ignore_markup())
+                                 reply_markup=back_boards_markup())
             else:
-                bot.send_message(message.chat.id, "Проекты с таким именем не найдены")
+                bot.send_message(message.chat.id, "Проекты с таким именем не найдены", reply_markup=markup)
         else:
-            bot.send_message(message.chat.id, "Введите название проекта")
+            bot.send_message(message.chat.id, "Введите название проекта", reply_markup=markup)
 
 
 def get_images(chat_id, ids):
@@ -515,6 +522,16 @@ def back_ignore_markup():
     return markup
 
 
+def back_boards_markup():
+    markup = InlineKeyboardMarkup()
+    markup.row_width=2
+    markup.add(InlineKeyboardButton("В \"борды\"", callback_data=CHAT_STATE_SET_BOARDS),
+               InlineKeyboardButton("В \"исключения\"", callback_data="ignored"),
+               InlineKeyboardButton("Найти другой проект", callback_data="project_id")
+               )
+    return markup
+
+
 @bot.message_handler(commands=['menu'])
 def menu(message):
     global state
@@ -574,21 +591,28 @@ def callback_query(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton("Вернуться в меню", callback_data=CHAT_STATE_BACK),
-                   InlineKeyboardButton("Удалить борды", callback_data=CHAT_STATE_REMOVE_BOARDS)
+                   InlineKeyboardButton("Удалить борды", callback_data=CHAT_STATE_REMOVE_BOARDS),
+                   InlineKeyboardButton("Узнать PHID", callback_data='project_id')
                    )
-        bot.send_message(call.message.chat.id, 'Введите через пробел PHIDы бордов, за которыми хотите наблюдать.\n'
-                                               'PHIDы бордов можно узнать, используя команду \n'
-                                               '<b>"/project_id название борда"</b> (Название не обязательно '
-                                               'вводить точь-в-точь)\n\n',
+        bot.send_message(call.message.chat.id, 'Отправьте в чат через пробел PHIDы бордов, за которыми хотите '
+                                               'наблюдать.\nPHIDы бордов можно узнать, '
+                                               'нажав на кнопку \"Узнать PHID\"\n\n',
                          parse_mode='HTML', reply_markup=markup)
         set_chat_state(CHAT_STATE_SET_BOARDS)
     elif call.data == CHAT_STATE_REMOVE_BOARDS:
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, "\U0001F648 Борды, которые подключены к мониторингу: \n%s"
-                                               "\nВведите номер борда, который хотите удалить из списка:" %
+                                               "\nОтправьте в чат номер борда, который хотите удалить из списка:" %
                          (getptojectname(call.message.chat.id, "phids", config.boards(call.message.chat.id)) or
                           "Список пуст\n"), parse_mode='Markdown', reply_markup=back_markup())
         set_chat_state(CHAT_STATE_REMOVE_BOARDS)
+    elif call.data == 'project_id':
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(call.message.chat.id, "Отправьте в чат название борда для "
+                                               "которого необходимо узнать PHID. \n"
+                                               "\n_Название не обязательно вводить точь-в-точь_",
+                         parse_mode='Markdown', reply_markup=back_markup())
+        set_chat_state(CHAT_STATE_GET_PROJECT_ID)
     elif call.data == CHAT_STATE_SET_FREQUENCY:
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, 'Введите частоту проверки обновлений в минутах:',
@@ -643,14 +667,14 @@ def callback_query(call):
     elif call.data == CHAT_STATE_REMOVE_IGNORED_COLUMS:
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, "\U0001F648 Колонки, перемещения по которым игнорируются: \n%s"
-                                               "\nВведите номер колонки, которую хотите удалить из списка:" %
+                                               "\nОтправьте в чат номер колонки, которую хотите удалить из списка:" %
                          getcolumns(call.message.chat.id), parse_mode='Markdown',
                          reply_markup=back_ignore_markup())
         set_chat_state(CHAT_STATE_REMOVE_IGNORED_COLUMS)
     elif call.data == CHAT_STATE_IGNORED_USERS:
         bot.delete_message(call.message.chat.id, call.message.message_id)
-        bot.send_message(call.message.chat.id, 'Введите PHIDы пользователей, действия которых вы хотите игнорировать, '
-                                               'или выберите себя нажав на кнопку ниже. '
+        bot.send_message(call.message.chat.id, 'Отправьте в чат PHIDы пользователей, действия которых вы хотите '
+                                               'игнорировать, или выберите себя нажав на кнопку ниже. '
                                                'Узнать PHID пользователя можно с помощью команды /user_id',
                          parse_mode='HTML', reply_markup=back_usrignore_markup())
         set_chat_state(CHAT_STATE_IGNORED_USERS)
@@ -824,7 +848,7 @@ def frequency(message, command=True):
                          "\u23F0 Частота опроса сервера (минуты): %d" % (config.frequency(message.chat.id) or 2))
         return
     if not args[0].isnumeric():
-        bot.send_message(message.chat.id, "Введите целочисленное значение!")
+        bot.send_message(message.chat.id, "Требуется целочисленное значение!")
         return
     if int(args[0]) >= 1:
         config.set_frequency(message.chat.id, int(args[0]))
@@ -862,7 +886,7 @@ def unset_boards(message):
                InlineKeyboardButton("Вернуться в главное меню", callback_data=CHAT_STATE_BACK)
                )
     if not message.text.isnumeric():
-        bot.send_message(message.chat.id, "\u274C Введите номер борда", reply_markup=markup)
+        bot.send_message(message.chat.id, "\u274C Отправьте номер борда", reply_markup=markup)
         return
     if (int(message.text) > len(config.boards(message.chat.id))) or (int(message.text) < 0):
         bot.send_message(message.chat.id, "\u274C Борда под таким номером нет", reply_markup=markup)
@@ -891,7 +915,7 @@ def ignored_boards(message, command=True):
 
 def unset_ignored_boards(message):
     if not message.text.isnumeric():
-        bot.send_message(message.chat.id, "\u274C Введите номер борда", reply_markup=back_ignore_markup())
+        bot.send_message(message.chat.id, "\u274C Отправьте номер борда", reply_markup=back_ignore_markup())
         return
     if (int(message.text) > len(config.ignored_boards(message.chat.id))) or (int(message.text) < 0):
         bot.send_message(message.chat.id, "\u274C Борда под таким номером нет", reply_markup=back_ignore_markup())
@@ -921,7 +945,7 @@ def ignored_users(message, command=True, phid=None):
 
 def unset_ignored_users(message):
     if not message.text.isnumeric():
-        bot.send_message(message.chat.id, "\u274C Введите номер пользователя", reply_markup=back_ignore_markup())
+        bot.send_message(message.chat.id, "\u274C Отправьте номер пользователя", reply_markup=back_ignore_markup())
         return
     if (int(message.text) > len(config.ignored_users(message.chat.id))) or (int(message.text) < 0):
         bot.send_message(message.chat.id, "\u274C Пользователя под таким номером нет", reply_markup=back_ignore_markup())
@@ -1005,6 +1029,8 @@ def setter(message):
         ignored_users(message, False)
     if chat_state == CHAT_STATE_REMOVE_IGNORED_USERS:
         unset_ignored_users(message)
+    if chat_state == CHAT_STATE_GET_PROJECT_ID:
+        get_project(message, False)
     state[message.chat.id] = None
 
 
