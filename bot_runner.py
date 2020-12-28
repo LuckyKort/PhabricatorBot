@@ -1,7 +1,6 @@
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import requests
 import telebot
-import ast
 import re
 import logging
 import os
@@ -410,9 +409,9 @@ def get_info(message, command=True):
                                               .replace("[", "\\[")
                                               .replace("`", "\\`"))
                 namestr = (info['name'].replace("_", "\\_")
-                                           .replace("*", "\\*")
-                                           .replace("[", "\\[")
-                                           .replace("`", "\\`"))
+                                       .replace("*", "\\*")
+                                       .replace("[", "\\[")
+                                       .replace("`", "\\`"))
                 for id in range(len(images['imglist'])):
                     replace_imgs = re.sub(r'{F' + str(images['imgids'][id]) + '}',
                                           '*(Изображение ' + str(id + 1) + ')*',

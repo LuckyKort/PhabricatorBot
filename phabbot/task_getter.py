@@ -313,7 +313,15 @@ class TaskGetter:
                 authorphid = json_dict['result']['data'][0]['fields']['author']['userPHID']
                 author = self.__whois(authorphid)
                 messagetext = json_dict['result']['data'][0]['fields']['message']
-                message = messagetext[0:100] + '...' if (len(messagetext) > 100) else messagetext
+                messagescreen = (messagetext.replace("_", "\\_")
+                                            .replace("*", "\\*")
+                                            .replace("[", "\\[")
+                                            .replace("`", "\\`")
+                                            .replace("|", "\n")
+                                            .replace(">", "\\>")
+                                            .replace("\n\n", "\n")
+                                            .replace("\n\n\n", "\n"))
+                message = messagescreen[0:200] + '...' if (len(messagescreen) > 200) else messagescreen
             return {"author": author, "message": message}
         except Exception as e:
             print('При получении коммита произошла ошибка: ', e)
@@ -499,9 +507,18 @@ class TaskGetter:
                                     replace_links = re.sub(r'\[\[(.*?)]]',
                                                            linktext[0] if len(linktext) > 0
                                                            else "ссылка", replace_attach)
+                                    comment_screen = (replace_links.replace("_", "\\_")
+                                                                   .replace("*", "\\*")
+                                                                   .replace("[", "\\[")
+                                                                   .replace("`", "\\`")
+                                                                   .replace("|", "\n")
+                                                                   .replace(">", "")
+                                                                   .replace("\n\n", "\n")
+                                                                   .replace("\n\n\n", "\n"))
+                                    bold_text = comment_screen.replace("\\*\\*", "*")
                                     comment = re.sub(r'^(^>).*', 'Цитата\n> : ' +
                                                                  quote_author[0] if len(quote_author) > 0 else
-                                                                 "Неизвестный" + ' писал:', replace_links)
+                                                                 "Неизвестный" + ' писал:', bold_text)
                                 else:
                                     comment = "Комментарий удален"
                                 author = self.__whois(task['result'][curr_id][j]['authorPHID'])
@@ -509,8 +526,8 @@ class TaskGetter:
                                 upd_summary[curr_num] = {"action": "comment",
                                                          "name": name['name'],
                                                          "task_id": task_id,
-                                                         "comment": comment[0:100] + '...' if
-                                                         (len(comment) > 100) else comment,
+                                                         "comment": comment[0:200] + '...' if
+                                                         (len(comment) > 200) else comment,
                                                          "author": authorstr}
                                 curr_num += 1
                         if task['result'][curr_id][j]['transactionType'] == "status":
@@ -542,34 +559,30 @@ class TaskGetter:
                                 if 7 not in self.settings and value.split("-")[1] == "PROJ":
                                     subaction = "proj"
                                     board = self.__getproject(value, "id")
-                                    added.append("<b>%s%s</b>" % (board['project'] + " - " if
-                                                                  board['project'] is not None
-                                                                  else "", board['board']))
+                                    added.append("*%s%s*" % (board['project'] + " - " if
+                                                             board['project'] is not None
+                                                             else "", board['board']))
                                 if 8 not in self.settings and value.split("-")[1] == "CMIT":
                                     subaction = "cmit"
                                     commit = self.__getcommit(value)
-                                    added.append("<b>%s</b>" % commit['message'])
+                                    added.append("*%s*" % commit['message'])
                                 if 9 not in self.settings and value.split("-")[1] == "TASK":
                                     subaction = "task"
                                     taskname = self.__gettaskname(value, "phid")
-                                    added.append("<a href=\"%s/T%s\">%s</a>" % (self.server,
-                                                                                taskname['id'],
-                                                                                taskname['name']))
+                                    added.append("[%s](%s/T%s)" % (taskname['name'], self.server, taskname['id']))
                             for value in old_values:
                                 if 7 not in self.settings:
                                     if value.split("-")[1] == "PROJ":
                                         subaction = "proj"
                                         board = self.__getproject(value, "id")
-                                        removed.append("<b>%s%s</b>" % (board['project'] + " - " if
-                                                                        board['project'] is not None
-                                                                        else "", board['board']))
+                                        removed.append("*%s%s*" % (board['project'] + " - " if
+                                                                   board['project'] is not None
+                                                                   else "", board['board']))
                                 if 9 not in self.settings:
                                     if value.split("-")[1] == "TASK":
                                         subaction = "task"
                                         taskname = self.__gettaskname(value, "phid")
-                                        removed.append("<a href=\"%s/T%s\">%s</a>" % (self.server,
-                                                                                      taskname['id'],
-                                                                                      taskname['name']))
+                                        removed.append("[%s](%s/T%s)" % (taskname['name'], self.server, taskname['id']))
                             if subaction is not None:
                                 upd_summary[curr_num] = {"action": "edge",
                                                          "subaction": subaction,
@@ -596,17 +609,17 @@ class TaskGetter:
                     continue
                 print(TaskGetter.__timenow() + ': Для чата ' + str(self.name) +
                       ' обнаружена новая задача - T' + str(result['task_id']))
-                resultstr = 'На борде <b>{0}</b> появилась новая задача ' \
-                            'с <b>{1}</b> приоритетом: \n\U0001F4CA <b>T{2} - {3}</b> \n' \
-                            '\U0001F425 Инициатор: <b>{4}</b>\n' \
-                            '\U0001F425 Исполнитель: <b>{5}</b>\n'.format(result['board'],
-                                                                          result['priority'],
-                                                                          result['task_id'],
-                                                                          result['name'],
-                                                                          result['author'],
-                                                                          result['owner']
-                                                                          )
-                TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML',
+                resultstr = 'На борде *{}* появилась новая задача ' \
+                            'с *{}* приоритетом: \n\U0001F4CA *T{} - {}* \n' \
+                            '\U0001F425 Инициатор: *{}*\n' \
+                            '\U0001F425 Исполнитель: *{}*\n'.format(result['board'],
+                                                                    result['priority'],
+                                                                    result['task_id'],
+                                                                    result['name'],
+                                                                    result['author'],
+                                                                    result['owner']
+                                                                    )
+                TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='Markdown',
                                               reply_markup=self.full_markup(result['task_id']))
                 self.__new_ids.append(int(result['task_id']))
 
@@ -619,7 +632,7 @@ class TaskGetter:
                 else:
                     print(self.__timenow() + ': Для чата ' + str(self.name) +
                           ' обнаружена обновленная задача - T' + result['task_id'])
-                    TaskGetter.__bot.send_message(self.chat_id, head + body, parse_mode='HTML',
+                    TaskGetter.__bot.send_message(self.chat_id, head + body, parse_mode='Markdown',
                                                   reply_markup=self.full_markup(result['task_id']))
 
             result_list = [res for res in results.values() if int(res['task_id']) not in self.__new_ids]
@@ -642,38 +655,38 @@ class TaskGetter:
                         result_messages[result['task_id']]['message'] = []
 
                 if result['action'] == "reassign":
-                    headstr = '\U0001F4CA В задаче <b>T{} - {}</b> '.format(result['task_id'], result['name'])
+                    headstr = '\U0001F4CA В задаче *T{} - {}* '.format(result['task_id'], result['name'])
                     resultstr = 'был изменен исполнитель: \n' \
-                                '\U0001F425 Предыдущий исполнитель: <b>{0}</b>\n' \
-                                '\U0001F425 Новый исполнитель: <b>{1}</b>\n'.format(result['oldowner'],
-                                                                                    result['newowner'])
+                                '\U0001F425 Предыдущий исполнитель: *{}*\n' \
+                                '\U0001F425 Новый исполнитель: *{}*\n'.format(result['oldowner'],
+                                                                              result['newowner'])
                     sendupd(headstr, resultstr)
 
                 if result['action'] == "move":
 
                     projstr = result['project'] is not None and (result['project'] + " - ") or ""
 
-                    headstr = '\U0001F4CA Задача <b>T{} - {}</b> '.format(result['task_id'], result['name'])
+                    headstr = '\U0001F4CA Задача *T{} - {}* '.format(result['task_id'], result['name'])
                     resultstr = 'перемещена в колонку ' \
-                                '<b>{0}</b> на борде <b>{1}{2}</b>\n'.format(result['column'],
-                                                                             projstr,
-                                                                             result['board']
-                                                                             )
+                                '*{0}* на борде *{1}{2}*\n'.format(result['column'],
+                                                                   projstr,
+                                                                   result['board']
+                                                                   )
                     sendupd(headstr, resultstr)
 
                 if result['action'] == "priority":
-                    headstr = '\U0001F4CA В задаче <b>T{} - {}</b> '.format(result['task_id'], result['name'])
-                    resultstr = '{0} приоритет ' \
-                                'с <b>{1}</b> до <b>{2}</b>\n'.format(result['subject'],
-                                                                      result['old_prior'],
-                                                                      result['new_prior'],
-                                                                      )
+                    headstr = '\U0001F4CA В задаче *T{} - {}* '.format(result['task_id'], result['name'])
+                    resultstr = '{} приоритет ' \
+                                'с *{}* до *{}*\n'.format(result['subject'],
+                                                          result['old_prior'],
+                                                          result['new_prior'],
+                                                          )
                     sendupd(headstr, resultstr)
 
                 if result['action'] == "comment":
-                    resultstr = '\n\U0001F4AC {0} добавил(-а) комментарий: \n<b>{1}</b>\n'.format(result['author'],
-                                                                                                  result['comment']
-                                                                                                  )
+                    resultstr = '\n\U0001F4AC {0} добавил(-а) комментарий: \n{1}\n'.format(result['author'],
+                                                                                           result['comment']
+                                                                                           )
                     if res_dict[result['task_id']] > 1:
                         result_messages[result['task_id']]['message'].append(resultstr)
 
@@ -681,30 +694,30 @@ class TaskGetter:
                     if (result['new_value'] in result['closed_statuses'] and result['old_value'] in
                         result['closed_statuses']) or (result['new_value'] not in result['closed_statuses'] and
                                                        result['old_value'] not in result['closed_statuses']):
-                        headstr = '\U0001F4CA В задаче <b>T{} - {}</b> '.format(result['task_id'], result['name'])
-                        resultstr = 'изменился статус с <b>{0}</b> на <b>{1}</b>\n'.format(result['rus_old_value'],
-                                                                                           result['rus_new_value'])
+                        headstr = '\U0001F4CA В задаче *T{} - {}* '.format(result['task_id'], result['name'])
+                        resultstr = 'изменился статус с *{}* на *{}*\n'.format(result['rus_old_value'],
+                                                                               result['rus_new_value'])
 
                     elif result['new_value'] in result['closed_statuses'] and \
                             result['old_value'] not in result['closed_statuses']:
-                        headstr = '\U0001F4CA Задача <b>T{} - {}</b> '.format(result['task_id'], result['name'])
-                        resultstr = 'закрыта со статусом <b>{0}</b> \n'.format(result['rus_new_value'])
+                        headstr = '\U0001F4CA Задача *T{} - {}* '.format(result['task_id'], result['name'])
+                        resultstr = 'закрыта со статусом *{0}* \n'.format(result['rus_new_value'])
 
                     elif result['new_value'] not in result['closed_statuses'] and \
                             result['old_value'] in result['closed_statuses']:
-                        headstr = '\U0001F4CA Задача <b>T{} - {}</b> '.format(result['task_id'], result['name'])
-                        resultstr = 'переоткрыта со статусом <b>{0}</b> \n'.format(result['rus_new_value'])
+                        headstr = '\U0001F4CA Задача *T{} - {}* '.format(result['task_id'], result['name'])
+                        resultstr = 'переоткрыта со статусом *{0}* \n'.format(result['rus_new_value'])
 
                     else:
-                        headstr = '\U0001F4CA В задаче <b>T{} - {}</b> '.format(result['task_id'], result['name'])
-                        resultstr = 'изменился статус с <b>{0}</b> на <b>{1}</b>\n'.format(result['rus_old_value'],
-                                                                                           result['rus_new_value'])
+                        headstr = '\U0001F4CA В задаче *T{} - {}* '.format(result['task_id'], result['name'])
+                        resultstr = 'изменился статус с *{0}* на *{1}*\n'.format(result['rus_old_value'],
+                                                                                 result['rus_new_value'])
 
                     sendupd(headstr, resultstr)
 
                 if result['action'] == "edge":
                     if len(result['added']) > 0 or len(result['removed']) > 0:
-                        headstr = '\U0001F4CA В задаче <b>T{} - {}</b> '.format(result['task_id'], result['name'])
+                        headstr = '\U0001F4CA В задаче *T{} - {}* '.format(result['task_id'], result['name'])
                         added_str = str()
                         removed_str = str()
                         subaction_word = {
@@ -733,11 +746,11 @@ class TaskGetter:
                     messagestr += actions
                 print(TaskGetter.__timenow() + ': Для чата ' + str(self.name) +
                       ' обнаружена обновленная задача - T' + message['id'])
-                resultstr = '\U0001F4CA В задаче <b>T{} - {}</b> произошли изменения:\n ' \
+                resultstr = '\U0001F4CA В задаче *T{} - {}* произошли изменения:\n ' \
                             '{} \n'.format(message['id'],
                                            message['name'],
                                            messagestr)
-                TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='HTML',
+                TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='Markdown',
                                               reply_markup=self.full_markup(message['id']))
 
     def __tasks_search(self):
