@@ -17,6 +17,7 @@ CHAT_STATE_SET_PHABAPI = "set_phab_api"
 CHAT_STATE_SET_BOARDS = "set_boards"
 CHAT_STATE_REMOVE_BOARDS = "remove_boards"
 CHAT_STATE_SET_FREQUENCY = "set_frequency"
+CHAT_STATE_WATCHTYPES = "set_watchtypes"
 CHAT_STATE_SET_IGNORED_BOARDS = "set_ignored_boards"
 CHAT_STATE_REMOVE_IGNORED_BOARDS = "remove_ignored_boards"
 CHAT_STATE_SET_IGNORED_COLUMNS = "set_ignored_columns"
@@ -175,7 +176,7 @@ def checkconfig(chatid, act, skip=None):
                                          "команду <b>/where_apitoken</b>", parse_mode='HTML')
             return False
         if "boards" not in skip:
-            if not config.boards(chatid):
+            if not config.boards(chatid) and config.watchtype(chatid) != 2:
                 if "msg" not in skip:
                     bot.send_message(chatid, "Для начала работы бота необходимо ввести PHIDы "
                                              "бордов которые необходимо мониторить "
@@ -523,7 +524,7 @@ def back_ignore_markup():
 
 def back_boards_markup():
     markup = InlineKeyboardMarkup()
-    markup.row_width=2
+    markup.row_width = 2
     markup.add(InlineKeyboardButton("В \"борды\"", callback_data=CHAT_STATE_SET_BOARDS),
                InlineKeyboardButton("В \"исключения\"", callback_data="ignored"),
                InlineKeyboardButton("Найти другой проект", callback_data="project_id")
@@ -537,9 +538,10 @@ def menu(message):
     state[message.chat.id] = None
     markup = InlineKeyboardMarkup()
     api_star = " *" if not config.phab_api(message.chat.id) else ""
-    boards_star = " *" if not config.boards(message.chat.id) else ""
+    boards_star = " *" if not config.boards(message.chat.id) and config.watchtype(message.chat.id) != 2 else ""
     markup.add(InlineKeyboardButton("API-Токен" + api_star, callback_data=CHAT_STATE_SET_PHABAPI),
                InlineKeyboardButton("Борды" + boards_star, callback_data=CHAT_STATE_SET_BOARDS),
+               InlineKeyboardButton("Что отслеживать", callback_data=CHAT_STATE_WATCHTYPES),
                InlineKeyboardButton("Частота опроса", callback_data=CHAT_STATE_SET_FREQUENCY),
                InlineKeyboardButton("Исключения", callback_data="ignored"),
                InlineKeyboardButton("Настройки", callback_data="settings")
@@ -550,8 +552,9 @@ def menu(message):
                       "%s Статус мониторинга: %s\n"
                       "%s"
                       "\n\U0001F3E0 Адрес фабрикатора: %s\n" 
-                      "\n\u23F0 Частота опроса сервера (минуты): %s\n" 
-                      "\n\U0001F440 Отслеживаемые борды: \n%s" 
+                      "\n\u23F0 Частота опроса сервера (минуты): %s\n"
+                      "\n\U0001F4CC Отслеживаются: %s\n"
+                      "%s" 
                       "\nВ меню *\"Исключения\"* вы можете настроить игнорирование пользователей, "
                       "перемещений по определенным бордам или колонкам\n"
                       "\nВ меню *\"Настройки\"* вы можете выбрать уведомления каких типов хотите получать\n"
@@ -559,13 +562,21 @@ def menu(message):
                       "\u2705" if config.active(message.chat.id) else "\u274C",
                       "Активен (Остановить: /unschedule)" if config.active(message.chat.id) else
                       "Отдыхает (Запустить: /schedule)",
-                      "\n\U0001F534 *Для начала работы установите настройки, помеченные звездами*\n" if
-                      not config.phab_api(message.chat.id) or not config.boards(message.chat.id) else "",
+                      "\n\U0001F534 *Для начала работы установите настройки, помеченные звездочками*\n" if
+                      (not config.phab_api(message.chat.id) or not config.boards(message.chat.id)) and
+                      config.watchtype(message.chat.id) != 2 else "",
                       config.server(message.chat.id) if checkconfig(message.chat.id, "check", ["boards", "msg"]) else
                       "Скрыт",
                       config.frequency(message.chat.id) or "2 (Стандартное значение)",
-                      getptojectname(message.chat.id, "phids", config.boards(message.chat.id)) or
-                      "Список пуст\n"
+                      {
+                          1: "Задачи на бордах",
+                          2: "Задачи на мне",
+                          3: "Задачи на бордах и на мне"
+                      }.get(config.watchtype(message.chat.id), "Задачи на бордах"),
+                      ("\n\U0001F440 Отслеживаемые борды: \n" + (getptojectname(message.chat.id, "phids",
+                                                                                config.boards(message.chat.id)) or
+                                                                 "Список пуст\n")) if
+                      config.watchtype(message.chat.id) != 2 else ""
                      ), parse_mode='Markdown', reply_markup=markup)
 
 
@@ -605,6 +616,15 @@ def callback_query(call):
                          (getptojectname(call.message.chat.id, "phids", config.boards(call.message.chat.id)) or
                           "Список пуст\n"), parse_mode='Markdown', reply_markup=back_markup())
         set_chat_state(CHAT_STATE_REMOVE_BOARDS)
+    elif call.data == CHAT_STATE_WATCHTYPES:
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        if call.message.chat.type == "private":
+            watchtypes(call.message)
+        else:
+            markup = InlineKeyboardMarkup()
+            markup.add(InlineKeyboardButton("Вернуться в главное меню", callback_data=CHAT_STATE_BACK))
+            bot.send_message(call.message.chat.id, 'Изменение типа отслеживания поддерживается только в личных чатах',
+                             parse_mode='HTML', reply_markup=markup)
     elif call.data == 'project_id':
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, "Отправьте в чат название борда для "
@@ -705,6 +725,11 @@ def callback_query(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
         set_priorities(call.message, priority)
         priorities(call.message)
+    elif call.data.startswith('watchtype'):
+        watchtype = call.data.replace("watchtype", "")
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        set_watchtype(call.message, int(watchtype))
+        watchtypes(call.message)
 
 
 @bot.message_handler(commands=['server'])
@@ -860,6 +885,37 @@ def frequency(message, command=True):
                          reply_markup=back_markup())
 
 
+@bot.message_handler(commands=['watchtype'])
+def watchtypes(message):
+    boards_emojii = "\u2705" if config.watchtype(message.chat.id) == 1 else "\u274C"
+    assign_emojii = "\u2705" if config.watchtype(message.chat.id) == 2 else "\u274C"
+    union_emojii = "\u2705" if config.watchtype(message.chat.id) == 3 else "\u274C"
+
+    watchtype_markup = InlineKeyboardMarkup()
+    watchtype_markup.row_width = 1
+    watchtype_markup.add(InlineKeyboardButton(boards_emojii + " Задачи на бордах",
+                                              callback_data='watchtype1'),
+                         InlineKeyboardButton(assign_emojii + " Задачи на мне",
+                                              callback_data='watchtype2'),
+                         InlineKeyboardButton(union_emojii + " Оба варианта",
+                                              callback_data='watchtype3'),
+                         InlineKeyboardButton("Вернуться в главное меню",
+                                              callback_data=CHAT_STATE_BACK)
+                         )
+
+    bot.send_message(message.chat.id, "Это ваши текущие настройки отслеживания. Нажмите, чтобы выбрать "
+                                      "что будет отслеживаться.",
+                     reply_markup=watchtype_markup)
+
+
+def set_watchtype(message, watchtype):
+    config.set_watchtype(message.chat.id, watchtype)
+    if watchtype == (1 or 3) and not config.boards(message.chat.id) and config.active(message.chat.id):
+        unschedule(message)
+        bot.send_message(message.chat.id, "\U0001F534 Вы выбрали отслеживание бордов, но они у вас не установлены, "
+                                          "по этому работа бота была приостановлена")
+
+
 @bot.message_handler(commands=['boards'])
 def boards(message, command=True):
     args = __extract_args(message.text) if command else message.text.replace('.', '').replace(',', '').split()
@@ -947,7 +1003,8 @@ def unset_ignored_users(message):
         bot.send_message(message.chat.id, "\u274C Отправьте номер пользователя", reply_markup=back_ignore_markup())
         return
     if (int(message.text) > len(config.ignored_users(message.chat.id))) or (int(message.text) < 0):
-        bot.send_message(message.chat.id, "\u274C Пользователя под таким номером нет", reply_markup=back_ignore_markup())
+        bot.send_message(message.chat.id, "\u274C Пользователя под таким номером нет",
+                         reply_markup=back_ignore_markup())
         return
     phid = config.ignored_users(message.chat.id)[int(message.text) - 1]
     config.unset_ignored_users(message.chat.id, phid)

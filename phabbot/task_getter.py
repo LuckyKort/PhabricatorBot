@@ -96,6 +96,10 @@ class TaskGetter:
         self.__chat_config['frequency'] = value
 
     @property
+    def watchtype(self) -> int:
+        return self.__chat_config.get('watchtype')
+
+    @property
     def boards(self) -> list:
         return self.__chat_config.get('boards')
 
@@ -145,6 +149,20 @@ class TaskGetter:
     @staticmethod
     def __serverdate_to_timestamp(date_str: str):
         return int(utils.parsedate_to_datetime(date_str).astimezone().timestamp())
+
+    def __whoaim(self):
+        try:
+                url = '{0}/api/user.whoami'.format(self.server)
+                data = {
+                    "api.token": self.phab_api
+                }
+                r = requests.post(url, params=data, verify=False)
+                json_dict = r.json()
+                username = json_dict['result']['userName']
+                return username
+        except Exception as e:
+            print('При получении имени пользователя произошла ошибка: ', e)
+            return None
 
     def __whois(self, phid):
         try:
@@ -754,7 +772,7 @@ class TaskGetter:
                                               reply_markup=self.full_markup(message['id']))
 
     def __tasks_search(self):
-        for board in self.boards:
+        def search_worker(board, watchtype):
             def search():
                 return requests.post(url, params=data, verify=False)
 
@@ -784,8 +802,14 @@ class TaskGetter:
 
             data = {
                 "api.token": self.phab_api,
-                "constraints[projects][0]": board
             }
+
+            if watchtype == 1:
+                data.update({"constraints[projects][0]": board})
+            elif watchtype == 2:
+                data.update({"constraints[assigned][0]": board})
+            else:
+                data.update({"constraints[projects][0]": board})
 
             data.update({"constraints[createdStart]": last_new})
             new_r = search()
@@ -812,6 +836,19 @@ class TaskGetter:
                         self.__send_results(updated_tasks, "upd")
 
         self.__sended_ids.clear()
+
+        if self.watchtype is None:
+            for board in self.boards:
+                search_worker(board, 1)
+        elif self.watchtype == 1:
+            for board in self.boards:
+                search_worker(board, 1)
+        elif self.watchtype == 2:
+            search_worker(self.__whoaim(), 2)
+        else:
+            for board in self.boards:
+                search_worker(board, 1)
+            search_worker(self.__whoaim(), 2)
 
     def tasks_search(self):
         try:

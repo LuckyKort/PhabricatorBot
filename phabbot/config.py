@@ -71,6 +71,18 @@ class Config(dict):
         chat['frequency'] = frequency
         self.dump()
 
+    def watchtype(self, chat_id):
+        chat = self.chat(chat_id, False)
+        if 'watchtype' not in chat:
+            return 1
+        else:
+            return chat.get('watchtype')
+
+    def set_watchtype(self, chat_id, watchtype):
+        chat = self.chat(chat_id, False)
+        chat['watchtype'] = watchtype
+        self.dump()
+
     def settings(self, chat_id) -> list:
         chat = self.chat(chat_id, False)
         return chat.get('settings', [])
