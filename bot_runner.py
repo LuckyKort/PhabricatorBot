@@ -90,7 +90,7 @@ def help_message(message):
 @bot.message_handler(commands=['schedule'])
 def schedule(message):
     getname(message)
-    if checkconfig(message.chat.id, "check"):
+    if checkconfig(message, "check"):
         TaskGetter.schedule(message.chat.id)
 
 
@@ -116,7 +116,7 @@ def sudo(message):
     if args[0] == 'send_message':
         send_message(' '.join(args[1:]))
     if args[0] == 'get_board':
-        bot.send_message(message.chat.id, getptojectname(message.chat.id, "phids", args[1:]), parse_mode='HTML')
+        bot.send_message(message.chat.id, getptojectname(message, "phids", args[1:]), parse_mode='HTML')
     if args[0] == 'users':
         get_users(message)
     if args[0] == 'checknow':
@@ -156,10 +156,11 @@ def status(message):
 
 @bot.message_handler(commands=['checkconfig'])
 def checkconf(message):
-    checkconfig(message.chat.id, "check")
+    checkconfig(message, "check")
 
 
-def checkconfig(chatid, act, skip=None):
+def checkconfig(message, act, skip=None):
+    chatid = message.chat.id
     if skip is None:
         skip = []
     if act == "check":
@@ -223,19 +224,21 @@ def checkconfig(chatid, act, skip=None):
     if act == "add":
         if config.active(chatid):
             return
-        if config.boards(chatid) and config.server(chatid) and config.phab_api(chatid):
-            bot.send_message(chatid, "\u2705 <b>Бот готов к работе.</b> Для начала мониторинга нажмите <b>/schedule</b>"
+        if (config.boards(chatid) or (config.watchtype(chatid) == 2)) and config.server(chatid) and config.phab_api(chatid):
+            bot.send_message(chatid, "\u2705 <b>Вы ввели необходимые настройки для запуска бота, "
+                                     "производится запуск бота."
                                      "\nТак-же, вы можете продолжить более тонкую "
                                      "настройку бота в главном меню (/menu)",
                              parse_mode='HTML')
+            schedule(message)
 
 
-def whoami(chatid):
-    if not checkconfig(chatid, "check"):
+def whoami(message):
+    if not checkconfig(message.chat.id, "check"):
         return False
     url = config.get('server') + '/api/user.whoami'
     data = {
-        "api.token": config.phab_api(chatid)
+        "api.token": config.phab_api(message.chat.id)
     }
     result = requests.post(url, params=data, allow_redirects=False, verify=False)
     json = result.json()
@@ -254,12 +257,13 @@ def getcolumns(chatid):
         return "Список пуст\n"
 
 
-def getptojectname(chatid, act, phids):
+def getptojectname(message, act, phids):
+    chatid = message.chat.id
     if phids and len(phids) > 0:
         defaultstr = str()
         for phid in phids:
             defaultstr += "\n*Неизвестен: * `" + phid + "`"
-        if not checkconfig(chatid, "check"):
+        if not checkconfig(message.chat.id, "check"):
             return defaultstr
         result = str()
         count = 1
@@ -284,12 +288,13 @@ def getptojectname(chatid, act, phids):
     return "Список пуст\n"
 
 
-def getusername(chatid, phids):
+def getusername(message, phids):
+    chatid = message.chat.id
     if phids and len(phids) > 0:
         defaultstr = str()
         for phid in phids:
             defaultstr += "\n*Неизвестен: * `" + phid + "`"
-        if not checkconfig(chatid, "check"):
+        if not checkconfig(message, "check"):
             return defaultstr
         result = str()
         count = 1
@@ -312,7 +317,7 @@ def getusername(chatid, phids):
 
 @bot.message_handler(commands=['project_id'])
 def get_project(message, command=True):
-    if checkconfig(message.chat.id, "check", "boards"):
+    if checkconfig(message, "check", "boards"):
         markup = InlineKeyboardMarkup()
         markup.row_width = 1
         markup.add(InlineKeyboardButton("Ввести другое название", callback_data='project_id'),
@@ -388,7 +393,7 @@ def get_images(chat_id, ids):
 
 @bot.message_handler(commands=['info'])
 def get_info(message, command=True):
-    if checkconfig(message.chat.id, "check", "boards"):
+    if checkconfig(message, "check", "boards"):
         args = __extract_args(message.text) if command else [message.text]
         if args[0].lower().startswith('t'):
             args[0] = args[0][1:]
@@ -459,7 +464,7 @@ def get_info(message, command=True):
 
 @bot.message_handler(commands=['user_id'])
 def get_user(message):
-    if checkconfig(message.chat.id, "check", "boards"):
+    if checkconfig(message, "check", "boards"):
         args = __extract_args(message.text)
         if args is not None:
             args = ' '.join(args)
@@ -565,7 +570,7 @@ def menu(message):
                       "\n\U0001F534 *Для начала работы установите настройки, помеченные звездочками*\n" if
                       (not config.phab_api(message.chat.id) or not config.boards(message.chat.id)) and
                       config.watchtype(message.chat.id) != 2 else "",
-                      config.server(message.chat.id) if checkconfig(message.chat.id, "check", ["boards", "msg"]) else
+                      config.server(message.chat.id) if checkconfig(message, "check", ["boards", "msg"]) else
                       "Скрыт",
                       config.frequency(message.chat.id) or "2 (Стандартное значение)",
                       {
@@ -573,7 +578,7 @@ def menu(message):
                           2: "Задачи на мне",
                           3: "Задачи на бордах и на мне"
                       }.get(config.watchtype(message.chat.id), "Задачи на бордах"),
-                      ("\n\U0001F440 Отслеживаемые борды: \n" + (getptojectname(message.chat.id, "phids",
+                      ("\n\U0001F440 Отслеживаемые борды: \n" + (getptojectname(message, "phids",
                                                                                 config.boards(message.chat.id)) or
                                                                  "Список пуст\n")) if
                       config.watchtype(message.chat.id) != 2 else ""
@@ -613,7 +618,7 @@ def callback_query(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, "\U0001F648 Борды, которые подключены к мониторингу: \n%s"
                                                "\nОтправьте в чат номер борда, который хотите удалить из списка:" %
-                         (getptojectname(call.message.chat.id, "phids", config.boards(call.message.chat.id)) or
+                         (getptojectname(call.message, "phids", config.boards(call.message.chat.id)) or
                           "Список пуст\n"), parse_mode='Markdown', reply_markup=back_markup())
         set_chat_state(CHAT_STATE_REMOVE_BOARDS)
     elif call.data == CHAT_STATE_WATCHTYPES:
@@ -650,11 +655,11 @@ def callback_query(call):
                                                '\n\U0001F648 Колонки, перемещения в которые игнорируются: \n%s'
                                                '\n\U0001F648 Пользователи, действия которых игнорируются: \n%s\n'
                                                '\nВыберите, что вы хотите игнорировать:' % (
-                                                getptojectname(call.message.chat.id, "phids",
+                                                getptojectname(call.message, "phids",
                                                                config.ignored_boards(call.message.chat.id)) or
                                                 "Список пуст\n",
                                                 getcolumns(call.message.chat.id),
-                                                getusername(call.message.chat.id,
+                                                getusername(call.message,
                                                             config.ignored_users(call.message.chat.id)) or
                                                 "Список пуст\n"),
                          parse_mode='Markdown', reply_markup=ignore_markup())
@@ -667,7 +672,7 @@ def callback_query(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются: \n%s"
                                                "\nВведите номер борда, который хотите удалить из списка:" %
-                         (getptojectname(call.message.chat.id, "phids", config.ignored_boards(call.message.chat.id)) or
+                         (getptojectname(call.message, "phids", config.ignored_boards(call.message.chat.id)) or
                           "Список пуст\n"), parse_mode='Markdown', reply_markup=back_ignore_markup())
         set_chat_state(CHAT_STATE_REMOVE_IGNORED_BOARDS)
     elif call.data == CHAT_STATE_SET_IGNORED_COLUMNS:
@@ -680,7 +685,7 @@ def callback_query(call):
         bot.delete_message(call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, "\U0001F648 Пользователи, действия которых игнорируются: \n%s"
                                                "\nВведите номер пользователя, который хотите удалить из списка:" %
-                         getusername(call.message.chat.id, config.ignored_users(call.message.chat.id)) or
+                         getusername(call.message, config.ignored_users(call.message.chat.id)) or
                          "Список пуст\n", parse_mode='Markdown', reply_markup=back_ignore_markup())
         set_chat_state(CHAT_STATE_REMOVE_IGNORED_USERS)
     elif call.data == CHAT_STATE_REMOVE_IGNORED_COLUMS:
@@ -699,7 +704,7 @@ def callback_query(call):
         set_chat_state(CHAT_STATE_IGNORED_USERS)
     elif call.data == "ignoremyself":
         bot.delete_message(call.message.chat.id, call.message.message_id)
-        myphid = whoami(call.message.chat.id)
+        myphid = whoami(call.messaged)
         ignored_users(call.message, False, myphid['phid'])
     elif call.data == "settings":
         bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -739,7 +744,7 @@ def server(message, command=True):
         config.set_server(message.chat.id, args[0])
         bot.answer_callback_query(message.chat.id, "Сервер установлен!")
         menu(message)
-        checkconfig(message.chat.id, "add")
+        checkconfig(message, "add")
     else:
         bot.send_message(message.chat.id, "\U0001F3E0 Адрес сервера: %s" % config.server(message.chat.id))
 
@@ -853,7 +858,7 @@ def phab_api(message, command=True):
             bot.delete_message(message.chat.id, message.message_id)
             bot.send_message(message.chat.id, "API токен установлен, сообщение с токеном удалено")
             menu(message)
-            checkconfig(message.chat.id, "add")
+            checkconfig(message, "add")
         else:
             bot.send_message(message.chat.id, "\u274C Указанный вами токен <b>%s</b> некорректен и установлен "
                                               "не будет" % args, parse_mode='HTML', reply_markup=back_markup())
@@ -914,6 +919,8 @@ def set_watchtype(message, watchtype):
         unschedule(message)
         bot.send_message(message.chat.id, "\U0001F534 Вы выбрали отслеживание бордов, но они у вас не установлены, "
                                           "по этому работа бота была приостановлена")
+    if watchtype == 2:
+        checkconfig(message, "add", None, message)
 
 
 @bot.message_handler(commands=['boards'])
@@ -927,10 +934,10 @@ def boards(message, command=True):
                 continue
             config.set_boards(message.chat.id, arg)
         menu(message)
-        checkconfig(message.chat.id, "add")
+        checkconfig(message, "add")
     else:
         bot.send_message(message.chat.id, "\U0001F440 Отслеживаемые борды: \n%s" %
-                         (getptojectname(message.chat.id, "phids", config.boards(message.chat.id))) or
+                         (getptojectname(message, "phids", config.boards(message.chat.id))) or
                          "Список пуст", parse_mode='Markdown')
 
 
@@ -964,7 +971,7 @@ def ignored_boards(message, command=True):
         bot.send_message(message.chat.id, "\u2705 Борд добавлен в игнорируемые", reply_markup=back_ignore_markup())
     else:
         bot.send_message(message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются: \n%s" %
-                         (getptojectname(message.chat.id, "phids", config.ignored_boards(message.chat.id)) or
+                         (getptojectname(message, "phids", config.ignored_boards(message.chat.id)) or
                           "Список пуст\n"), parse_mode='Markdown')
 
 
@@ -994,7 +1001,7 @@ def ignored_users(message, command=True, phid=None):
                          reply_markup=back_ignore_markup())
     else:
         bot.send_message(message.chat.id, "\U0001F648 Пользователи, действия которых игнорируются: \n%s" %
-                         (getusername(message.chat.id, config.ignored_users(message.chat.id)) or
+                         (getusername(message, config.ignored_users(message.chat.id)) or
                           "Список пуст\n"), parse_mode='Markdown')
 
 
@@ -1041,8 +1048,8 @@ def last_check(message):
     bot.send_message(message.chat.id,
                      "Время последней проверки на наличие новых задач: \n%s\n"
                      "Время последней проверки на наличие обновленных задач: \n%s" % (
-                         getptojectname(message.chat.id, "ts", config.last_new_check(message.chat.id)),
-                         getptojectname(message.chat.id, "ts", config.last_update_check(message.chat.id))),
+                         getptojectname(message, "ts", config.last_new_check(message.chat.id)),
+                         getptojectname(message, "ts", config.last_update_check(message.chat.id))),
                      parse_mode='Markdown')
 
 
