@@ -253,6 +253,7 @@ class TaskGetter:
                                   "owner": owner,
                                   "created": created
                     }
+                    print("%s запросил инормацию по задаче T%s" % (self.name, value))
                     return summary
                 else:
                     return None
@@ -340,6 +341,8 @@ class TaskGetter:
                                             .replace("\n\n", "\n")
                                             .replace("\n\n\n", "\n"))
                 message = messagescreen[0:200] + '...' if (len(messagescreen) > 200) else messagescreen
+                if message.count('*') % 2 != 0:
+                    message = message + "*"
             return {"author": author, "message": message}
         except Exception as e:
             print('При получении коммита произошла ошибка: ', e)
@@ -541,6 +544,8 @@ class TaskGetter:
                                     comment = "Комментарий удален"
                                 author = self.__whois(task['result'][curr_id][j]['authorPHID'])
                                 authorstr = author['realname'] + TaskGetter.gentglink(author['telegram'])
+                                if comment.count('*') % 2 != 0:
+                                    comment = comment + "*"
                                 upd_summary[curr_num] = {"action": "comment",
                                                          "name": name['name'],
                                                          "task_id": task_id,
@@ -583,7 +588,7 @@ class TaskGetter:
                                 if 8 not in self.settings and value.split("-")[1] == "CMIT":
                                     subaction = "cmit"
                                     commit = self.__getcommit(value)
-                                    added.append("*%s*" % commit['message'])
+                                    added.append("*%s*" % commit['message'].replace("\n\n", "\n"))
                                 if 9 not in self.settings and value.split("-")[1] == "TASK":
                                     subaction = "task"
                                     taskname = self.__gettaskname(value, "phid")
@@ -674,7 +679,7 @@ class TaskGetter:
 
                 if result['action'] == "reassign":
                     headstr = '\U0001F4CA В задаче *T{} - {}* '.format(result['task_id'], result['name'])
-                    resultstr = 'был изменен исполнитель: \n' \
+                    resultstr = 'изменен исполнитель: \n' \
                                 '\U0001F425 Предыдущий исполнитель: *{}*\n' \
                                 '\U0001F425 Новый исполнитель: *{}*\n'.format(result['oldowner'],
                                                                               result['newowner'])
@@ -854,6 +859,8 @@ class TaskGetter:
         try:
             self.__tasks_search()
         except Exception as e:
+            TaskGetter.__bot.send_message(self.chat_id, "При попытке отправить вам сообщение произошла ошибка. "
+                                                        "Приносим свои извинения", parse_mode='Markdown')
             print(e)
 
     @staticmethod

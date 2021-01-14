@@ -263,7 +263,7 @@ def getptojectname(message, act, phids):
         defaultstr = str()
         for phid in phids:
             defaultstr += "\n*Неизвестен: * `" + phid + "`"
-        if not checkconfig(message.chat.id, "check"):
+        if not checkconfig(message, "check"):
             return defaultstr
         result = str()
         count = 1
@@ -426,9 +426,9 @@ def get_info(message, command=True):
                 result_desc = replace_attach.replace("\\*\\*", "*")
                 if len(result_desc) > 1000:
                     result_desc = result_desc[0:1000]
-                    if result_desc.count('*') % 2 != 0:
-                        result_desc = result_desc + "*"
                     result_desc = result_desc + "... *текст обрезан, полная версия по ссылке ниже*"
+                if result_desc.count('*') % 2 != 0:
+                    result_desc = result_desc + "*"
                 str_message = ("\U0001F4CA *Задача Т%s:* %s \n\n"
                                "\U0001F4C5 *Дата создания:* %s \n\n"
                                "\U0001F4C8 *Приоритет:* %s \n\n"
@@ -892,9 +892,9 @@ def frequency(message, command=True):
 
 @bot.message_handler(commands=['watchtype'])
 def watchtypes(message):
-    boards_emojii = "\u2705" if config.watchtype(message.chat.id) == 1 else "\u274C"
-    assign_emojii = "\u2705" if config.watchtype(message.chat.id) == 2 else "\u274C"
-    union_emojii = "\u2705" if config.watchtype(message.chat.id) == 3 else "\u274C"
+    boards_emojii = "\u2705" if config.watchtype(message.chat.id) == 1 else ""
+    assign_emojii = "\u2705" if config.watchtype(message.chat.id) == 2 else ""
+    union_emojii = "\u2705" if config.watchtype(message.chat.id) == 3 else ""
 
     watchtype_markup = InlineKeyboardMarkup()
     watchtype_markup.row_width = 1
