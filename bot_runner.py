@@ -234,7 +234,7 @@ def checkconfig(message, act, skip=None):
 
 
 def whoami(message):
-    if not checkconfig(message.chat.id, "check"):
+    if not checkconfig(message, "check"):
         return False
     url = config.get('server') + '/api/user.whoami'
     data = {
@@ -262,7 +262,7 @@ def getptojectname(message, act, phids):
     if phids and len(phids) > 0:
         defaultstr = str()
         for phid in phids:
-            defaultstr += "\n*Неизвестен: * `" + phid + "`"
+            defaultstr += "\n*Неизвестен:* `" + phid + "`"
         if not checkconfig(message, "check"):
             return defaultstr
         result = str()
@@ -276,13 +276,24 @@ def getptojectname(message, act, phids):
             r = requests.post(url, params=data, verify=False)
             json = r.json()
             name = json['result']['data'][0]['fields']['name'] if len(json['result']['data']) else "Неизвестен"
+            myname = "Неизвестен"
+            if not phid.startswith('PHID'):
+                who = whoami(message)
+                if who['userName'] == phid:
+                    myname = "Задачи на мне"
             if len(json) > 0:
                 if act == "phids":
-                    result += "*%s. %s:* `%s`\n" % (count, name, phid)
+                    if phid.startswith('PHID'):
+                        result += "*%s. %s:* `%s`\n" % (count, name, phid)
+                    else:
+                        result += "*%s. %s* \n" % (count, myname)
                     count += 1
                 if act == "ts":
                     time = strftime("%H:%M:%S", localtime(phids[phid]))
-                    result += "*%s:* %s\n" % (name, time)
+                    if phid.startswith('PHID'):
+                        result += "*%s:* %s\n" % (name, time)
+                    else:
+                        result += "*%s:* %s\n" % (myname, time)
         if len(result) > 0:
             return result
     return "Список пуст\n"
@@ -902,7 +913,7 @@ def watchtypes(message):
                                               callback_data='watchtype1'),
                          InlineKeyboardButton(assign_emojii + " Задачи на мне",
                                               callback_data='watchtype2'),
-                         InlineKeyboardButton(union_emojii + " Оба варианта",
+                         InlineKeyboardButton(union_emojii + " Задачи на бордах и на мне",
                                               callback_data='watchtype3'),
                          InlineKeyboardButton("Вернуться в главное меню",
                                               callback_data=CHAT_STATE_BACK)
@@ -920,7 +931,7 @@ def set_watchtype(message, watchtype):
         bot.send_message(message.chat.id, "\U0001F534 Вы выбрали отслеживание бордов, но они у вас не установлены, "
                                           "по этому работа бота была приостановлена")
     if watchtype == 2:
-        checkconfig(message, "add", None, message)
+        checkconfig(message, "add", None)
 
 
 @bot.message_handler(commands=['boards'])

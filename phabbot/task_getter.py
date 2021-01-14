@@ -241,6 +241,8 @@ class TaskGetter:
                                       ) if projectsumm['project'] is not None else projectsumm['board']
                         projects_list.append(projectstr)
                     projects = ", ".join(projects_list)
+                    if len(projects_list) < 1:
+                        projects = "Тегов нет"
                     if projects is None:
                         projects = "Не установлены"
                     summary = {
@@ -624,7 +626,7 @@ class TaskGetter:
             print('При получении обновлений произошла ошибка: ', e)
             return None
 
-    def __send_results(self, results, act):
+    def __send_results(self, results, act, watchtype):
         assert (results and len(results))
         if act == "new":
             for result in results.values():
@@ -632,10 +634,11 @@ class TaskGetter:
                     continue
                 print(TaskGetter.__timenow() + ': Для чата ' + str(self.name) +
                       ' обнаружена новая задача - T' + str(result['task_id']))
-                resultstr = 'На борде *{}* появилась новая задача ' \
+                startstr = "На борде *{}* появилась".format(result['board']) if watchtype != 2 else "На вас назначена"
+                resultstr = '{} новая задача ' \
                             'с *{}* приоритетом: \n\U0001F4CA *T{} - {}* \n' \
                             '\U0001F425 Инициатор: *{}*\n' \
-                            '\U0001F425 Исполнитель: *{}*\n'.format(result['board'],
+                            '\U0001F425 Исполнитель: *{}*\n'.format(startstr,
                                                                     result['priority'],
                                                                     result['task_id'],
                                                                     result['name'],
@@ -831,14 +834,14 @@ class TaskGetter:
             upd_parsed = self.__parse_results(upd_r.json(), "upd", board)
 
             if new_parsed is not None:
-                self.__send_results(new_parsed, "new")
+                self.__send_results(new_parsed, "new", watchtype)
 
             if upd_parsed is not None:
                 if upd_parsed not in self.__sended_ids:
                     self.__sended_ids.append(upd_parsed)
                     updated_tasks = self.__getupdates(upd_parsed, last_update)
                     if updated_tasks is not None:
-                        self.__send_results(updated_tasks, "upd")
+                        self.__send_results(updated_tasks, "upd", watchtype)
 
         self.__sended_ids.clear()
 
