@@ -2,7 +2,7 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import requests
 import telebot
 import re
-import logging
+# import logging
 import os
 from phabbot.config import Config
 from phabbot.task_getter import TaskGetter
@@ -224,7 +224,8 @@ def checkconfig(message, act, skip=None):
     if act == "add":
         if config.active(chatid):
             return
-        if (config.boards(chatid) or (config.watchtype(chatid) == 2)) and config.server(chatid) and config.phab_api(chatid):
+        if (config.boards(chatid) or (config.watchtype(chatid) == 2)) and \
+                config.server(chatid) and config.phab_api(chatid):
             bot.send_message(chatid, "\u2705 <b>Вы ввели необходимые настройки для запуска бота, "
                                      "производится запуск бота."
                                      "\nТак-же, вы можете продолжить более тонкую "
@@ -379,8 +380,8 @@ def get_images(chat_id, ids):
     data = {
         "api.token": config.phab_api(chat_id),
     }
-    for id in range(len(ids)):
-        data['constraints[ids][' + str(id) + ']'] = ids[id]
+    for imgid in range(len(ids)):
+        data['constraints[ids][' + str(imgid) + ']'] = ids[imgid]
     r = requests.post(url, params=data, verify=False)
     result = r.json()
     result['result']['data'].reverse()
@@ -429,9 +430,9 @@ def get_info(message, command=True):
                                        .replace("*", "\\*")
                                        .replace("[", "\\[")
                                        .replace("`", "\\`"))
-                for id in range(len(images['imglist'])):
-                    replace_imgs = re.sub(r'{F' + str(images['imgids'][id]) + '}',
-                                          '*(Изображение ' + str(id + 1) + ')*',
+                for imgid in range(len(images['imglist'])):
+                    replace_imgs = re.sub(r'{F' + str(images['imgids'][imgid]) + '}',
+                                          '*(Изображение ' + str(imgid + 1) + ')*',
                                           replace_imgs)
                 replace_attach = re.sub(r'{F([\s\S]+?)}', '*(Вложение)*', replace_imgs)
                 result_desc = replace_attach.replace("\\*\\*", "*")
@@ -715,7 +716,7 @@ def callback_query(call):
         set_chat_state(CHAT_STATE_IGNORED_USERS)
     elif call.data == "ignoremyself":
         bot.delete_message(call.message.chat.id, call.message.message_id)
-        myphid = whoami(call.messaged)
+        myphid = whoami(call.message)
         ignored_users(call.message, False, myphid['phid'])
     elif call.data == "settings":
         bot.delete_message(call.message.chat.id, call.message.message_id)

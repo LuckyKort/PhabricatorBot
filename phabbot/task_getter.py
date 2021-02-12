@@ -8,6 +8,7 @@ import schedule
 import telebot
 import time
 import logging
+import json
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from .config import Config
 
@@ -150,16 +151,19 @@ class TaskGetter:
     def __serverdate_to_timestamp(date_str: str):
         return int(utils.parsedate_to_datetime(date_str).astimezone().timestamp())
 
-    def __whoaim(self):
+    def __whoami(self):
         try:
-                url = '{0}/api/user.whoami'.format(self.server)
-                data = {
-                    "api.token": self.phab_api
-                }
-                r = requests.post(url, params=data, verify=False)
-                json_dict = r.json()
+            url = '{0}/api/user.whoami'.format(self.server)
+            data = {
+                "api.token": self.phab_api
+            }
+            r = requests.post(url, params=data, verify=False)
+            json_dict = r.json()
+            if json_dict['result'] is not None:
                 username = json_dict['result']['userName']
                 return username
+            else:
+                return None
         except Exception as e:
             print('При получении имени пользователя произошла ошибка: ', e)
             return None
@@ -179,7 +183,7 @@ class TaskGetter:
                 telegram = json_dict['result']['data'][0]['fields']['custom.Telegram']
                 return {'username': username, 'realname': realname, 'telegram': telegram}
             else:
-                return {'username': "Не определен", 'realname': "Не определен", 'telegram': None}
+                return {'username': "Не определен", 'realname': "Не определен", 'telegram': "None"}
         except Exception as e:
             print('При получении имени пользователя произошла ошибка: ', e)
             return None
@@ -369,20 +373,20 @@ class TaskGetter:
     @staticmethod
     def __getstatus(value):
         try:
-            task_status = {"open": "Открыт",
-                           "resolved": "Решен",
+            task_status = {"open": "Открыта",
+                           "resolved": "Решена",
                            "wontfix": "Wontfix",
-                           "invalid": "Некорректен",
+                           "invalid": "Некорректна",
                            "spite": "Spite",
                            "analytics": "Аналитика",
                            "testing": "Тестирование",
                            "todo": "TODO",
-                           "verified": "Верифицирован",
+                           "verified": "Верифицирована",
                            "projecting": "Проектирование",
                            "inprogress": "В работе",
-                           "stalled": "Затянут",
-                           "complete": "Завершен"
-                           }.get(value, "неопределенный")
+                           "stalled": "Затянута",
+                           "complete": "Завершена"
+                           }.get(value, "Неопределенный")
             return task_status
         except Exception as e:
             print('При получении статуса произошла ошибка: ', e)
@@ -780,7 +784,7 @@ class TaskGetter:
                                               reply_markup=self.full_markup(message['id']))
 
     def __tasks_search(self):
-        def search_worker(board, watchtype):
+        def search_worker(subj, watchtype):
             def search():
                 return requests.post(url, params=data, verify=False)
 
@@ -789,18 +793,18 @@ class TaskGetter:
             if not self.last_update_check:
                 self.last_update_check = {}
 
-            if not self.last_new_check.get(board):
-                self.last_new_check[board] = self.__timestamp()
-            if not self.last_update_check.get(board):
-                self.last_update_check[board] = self.last_new_check[board]
+            if not self.last_new_check.get(subj):
+                self.last_new_check[subj] = self.__timestamp()
+            if not self.last_update_check.get(subj):
+                self.last_update_check[subj] = self.last_new_check[subj]
 
-            last_new = self.last_new_check[board]
-            last_update = self.last_update_check[board]
+            last_new = self.last_new_check[subj]
+            last_update = self.last_update_check[subj]
 
             # Проверка последних обновленных задач не может быть раньше проверки новых заданий
             assert last_update >= last_new
             if last_update < last_new:
-                self.last_update_check[board] = last_new
+                self.last_update_check[subj] = last_new
                 last_update = last_new
 
             # TODO: Идет сброс костыльного счетчика идентификаторов
@@ -813,11 +817,11 @@ class TaskGetter:
             }
 
             if watchtype == 1:
-                data.update({"constraints[projects][0]": board})
+                data.update({"constraints[projects][0]": subj})
             elif watchtype == 2:
-                data.update({"constraints[assigned][0]": board})
+                data.update({"constraints[assigned][0]": subj})
             else:
-                data.update({"constraints[projects][0]": board})
+                data.update({"constraints[projects][0]": subj})
 
             data.update({"constraints[createdStart]": last_new})
             new_r = search()
@@ -826,12 +830,28 @@ class TaskGetter:
 
             upd_r = search()
 
-            self.last_new_check[board] = TaskGetter.__serverdate_to_timestamp(new_r.headers['date'])
-            self.last_update_check[board] = TaskGetter.__serverdate_to_timestamp(upd_r.headers['date'])
+            self.last_new_check[subj] = TaskGetter.__serverdate_to_timestamp(new_r.headers['date'])
+            self.last_update_check[subj] = TaskGetter.__serverdate_to_timestamp(upd_r.headers['date'])
             TaskGetter.__config.dump()
 
-            new_parsed = self.__parse_results(new_r.json(), "new", board)
-            upd_parsed = self.__parse_results(upd_r.json(), "upd", board)
+            def validatejson(jsondata):
+                try:
+                    json.loads(jsondata)
+                except ValueError as err:
+                    return False
+                return True
+
+            if validatejson(new_r.text):
+                new_parsed = self.__parse_results(new_r.json(), "new", subj)
+            else:
+                print("JSON новых задач некорректен")
+                new_parsed = None
+
+            if validatejson(upd_r.text):
+                upd_parsed = self.__parse_results(upd_r.json(), "upd", subj)
+            else:
+                print("JSON обновленных задач некорректен")
+                upd_parsed = None
 
             if new_parsed is not None:
                 self.__send_results(new_parsed, "new", watchtype)
@@ -852,18 +872,18 @@ class TaskGetter:
             for board in self.boards:
                 search_worker(board, 1)
         elif self.watchtype == 2:
-            search_worker(self.__whoaim(), 2)
+            search_worker(self.__whoami(), 2)
         else:
             for board in self.boards:
                 search_worker(board, 1)
-            search_worker(self.__whoaim(), 2)
+            search_worker(self.__whoami(), 2)
 
     def tasks_search(self):
+        if self.__whoami() is None:
+            return
         try:
             self.__tasks_search()
         except Exception as e:
-            TaskGetter.__bot.send_message(self.chat_id, "При попытке отправить вам сообщение произошла ошибка. "
-                                                        "Приносим свои извинения", parse_mode='Markdown')
             print(e)
 
     @staticmethod
@@ -892,6 +912,8 @@ class TaskGetter:
         def schedule_task(config):
             if not config.get('active'):
                 return
+            if not config.get('boards'):
+                return
             task_getter = TaskGetter(config)
             assert task_getter.chat_id is not None
             if TaskGetter.__active_tasks.get(task_getter.chat_id):
@@ -912,11 +934,14 @@ class TaskGetter:
             for chat_config in TaskGetter.__config['chats']:
                 schedule_task(chat_config)
             while True:
-                if TaskGetter.__stop_threads:
-                    schedule.clear()
-                    return
-                schedule.run_pending()
-                time.sleep(1)
+                try:
+                    if TaskGetter.__stop_threads:
+                        schedule.clear()
+                        return
+                    schedule.run_pending()
+                    time.sleep(1)
+                except Exception as e:
+                    time.sleep(15)
 
     @staticmethod
     def info(chat_id: int or None = None, value=False):
@@ -937,7 +962,7 @@ class TaskGetter:
             if thread is None:
                 thread = Thread(target=TaskGetter.schedule)
             thread.start()
-            TaskGetter.__bot.polling(True)
+            TaskGetter.__bot.polling(none_stop=True)
         except Exception as e:
             print('Произошла ошибка: ' + str(e))
             TaskGetter.__stop_threads = True
