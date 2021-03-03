@@ -25,7 +25,8 @@ class TaskGetter:
         self.__chat_config = config
         # TODO: Сейчас запоминание идентификаторов новых заданий выглядит как костыль
         self.__new_ids = []
-        self.__sended_ids = []
+        self.__new_sended_ids = []
+        self.__upd_sended_ids = []
         return
 
     def full_markup(self, task_id):
@@ -46,6 +47,15 @@ class TaskGetter:
     def server(self, value: str):
         assert value is not None
         self.__chat_config['server'] = value
+
+    @property
+    def superusers(self) -> str:
+        return TaskGetter.__config.get('superusers')
+
+    @superusers.setter
+    def superusers(self, value: str):
+        assert value is not None
+        self.__chat_config['superusers'] = value
 
     @property
     def chat_id(self) -> int:
@@ -159,13 +169,17 @@ class TaskGetter:
             }
             r = requests.post(url, params=data, verify=False)
             json_dict = r.json()
-            if json_dict['result'] is not None:
-                username = json_dict['result']['userName']
+            if json_dict.get('result') is not None:
+                username = json_dict['result'].get('userName') or \
+                           json_dict['result']['data'][0]['fields'].get('username')
                 return username
             else:
                 return None
         except Exception as e:
-            print('При получении имени пользователя произошла ошибка: ', e)
+            for user in self.superusers:
+                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени пользователя, "
+                                                    "проверьте консоль")
+            print('При получении имени пользователя произошла ошибка:', e)
             return None
 
     def __whois(self, phid):
@@ -184,7 +198,12 @@ class TaskGetter:
                 return {'username': username, 'realname': realname, 'telegram': telegram}
             else:
                 return {'username': "Не определен", 'realname': "Не определен", 'telegram': "None"}
+        except ConnectionError or requests.exceptions.HTTPError as err:
+            print('При подключении произошла ошибка: %s' % err)
         except Exception as e:
+            for user in self.superusers:
+                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени пользователя, "
+                                                    "проверьте консоль")
             print('При получении имени пользователя произошла ошибка: ', e)
             return None
 
@@ -208,6 +227,9 @@ class TaskGetter:
             else:
                 return "Неизвестен"
         except Exception as e:
+            for user in self.superusers:
+                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени задачи, "
+                                                    "проверьте консоль")
             print('При получении имени задачи произошла ошибка: ', e)
             return None
 
@@ -266,6 +288,9 @@ class TaskGetter:
             else:
                 return None
         except Exception as e:
+            for user in self.superusers:
+                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении информации о задаче, "
+                                                    "проверьте консоль")
             print('При получении информации о задаче произошла ошибка: ', e)
             return None
 
@@ -289,6 +314,9 @@ class TaskGetter:
             else:
                 return "Неизвестен"
         except Exception as e:
+            for user in self.superusers:
+                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени колонки, "
+                                                    "проверьте консоль")
             print('При получении имени колонки произошла ошибка: ', e)
             return None
 
@@ -317,6 +345,9 @@ class TaskGetter:
                         phproject = json_dict['result']['data'][0]['fields']['parent']['name']
             return {'board': phboard, 'project': phproject}
         except Exception as e:
+            for user in self.superusers:
+                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени проекта, "
+                                                    "проверьте консоль")
             print('При получении имени проекта произошла ошибка: ', e)
             return None
 
@@ -351,11 +382,13 @@ class TaskGetter:
                     message = message + "*"
             return {"author": author, "message": message}
         except Exception as e:
+            for user in self.superusers:
+                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении коммита, "
+                                                    "проверьте консоль")
             print('При получении коммита произошла ошибка: ', e)
             return None
 
-    @staticmethod
-    def __getpriority(value):
+    def __getpriority(self, value):
         try:
             task_prior = {
                 10: ("Whishlist", "wishlist", "wishlist"),
@@ -367,11 +400,13 @@ class TaskGetter:
             }.get(value, ("Неопределенный", "неопределенным", "неопределенного"))
             return task_prior
         except Exception as e:
+            for user in self.superusers:
+                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении приоритета, "
+                                                    "проверьте консоль")
             print('При получении приоритета произошла ошибка: ', e)
             return None
 
-    @staticmethod
-    def __getstatus(value):
+    def __getstatus(self, value):
         try:
             task_status = {"open": "Открыта",
                            "resolved": "Решена",
@@ -389,6 +424,9 @@ class TaskGetter:
                            }.get(value, "Неопределенный")
             return task_status
         except Exception as e:
+            for user in self.superusers:
+                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени пользователя, "
+                                                    "проверьте консоль")
             print('При получении статуса произошла ошибка: ', e)
             return None
 
@@ -410,7 +448,7 @@ class TaskGetter:
                             prior = int(json_dict['result']['data'][i]['fields']['priority']['value'])
                             if prior in self.priorities:
                                 continue
-                            task_prior = TaskGetter.__getpriority(prior)[1]
+                            task_prior = self.__getpriority(prior)[1]
                             owner = json_dict['result']['data'][i]['fields']['ownerPHID']
                             task_owner = self.__whois(owner)
                             task_owner_tg = TaskGetter.gentglink(task_owner['telegram'])
@@ -446,6 +484,9 @@ class TaskGetter:
                 else:
                     return None
         except Exception as e:
+            for user in self.superusers:
+                TaskGetter.__bot.send_message(user, "Произошла ошибка при парсинге результатов, "
+                                                    "проверьте консоль")
             print('При парсинге результатов произошла ошибка: ', e)
             return None
 
@@ -513,8 +554,8 @@ class TaskGetter:
                                 task_id = task['result'][curr_id][j]['taskID']
                                 old_value = int(task['result'][curr_id][j]['oldValue'])
                                 new_value = int(task['result'][curr_id][j]['newValue'])
-                                old_prior = TaskGetter.__getpriority(old_value)[2]
-                                new_prior = TaskGetter.__getpriority(new_value)[2]
+                                old_prior = self.__getpriority(old_value)[2]
+                                new_prior = self.__getpriority(new_value)[2]
                                 subject = "повышен" if old_value < new_value else "понижен"
                                 upd_summary[curr_num] = {"action": "priority",
                                                          "name": name['name'],
@@ -627,6 +668,9 @@ class TaskGetter:
             else:
                 return None
         except Exception as e:
+            for user in self.superusers:
+                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении обновлений, "
+                                                    "проверьте консоль")
             print('При получении обновлений произошла ошибка: ', e)
             return None
 
@@ -854,16 +898,21 @@ class TaskGetter:
                 upd_parsed = None
 
             if new_parsed is not None:
-                self.__send_results(new_parsed, "new", watchtype)
+                new_tasks = []
+                for task in range(len(new_parsed)):
+                    if new_parsed[task]['id'] not in self.__new_sended_ids:
+                        new_tasks.append(new_parsed[task])
+                self.__send_results(new_tasks, "new", watchtype)
 
             if upd_parsed is not None:
-                if upd_parsed not in self.__sended_ids:
-                    self.__sended_ids.append(upd_parsed)
+                if upd_parsed not in self.__upd_sended_ids:
+                    self.__upd_sended_ids.append(upd_parsed)
                     updated_tasks = self.__getupdates(upd_parsed, last_update)
                     if updated_tasks is not None:
                         self.__send_results(updated_tasks, "upd", watchtype)
 
-        self.__sended_ids.clear()
+        self.__new_sended_ids.clear()
+        self.__upd_sended_ids.clear()
 
         if self.watchtype is None:
             for board in self.boards:
@@ -941,6 +990,7 @@ class TaskGetter:
                     schedule.run_pending()
                     time.sleep(1)
                 except Exception as e:
+                    print("Шеф, усё пропало. Ложусь спать на 15 сек")
                     time.sleep(15)
 
     @staticmethod

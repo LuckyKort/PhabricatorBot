@@ -328,14 +328,14 @@ def getusername(message, phids):
 
 
 @bot.message_handler(commands=['project_id'])
-def get_project(message, command=True):
+def get_project(message):
     if checkconfig(message, "check", "boards"):
         markup = InlineKeyboardMarkup()
         markup.row_width = 1
         markup.add(InlineKeyboardButton("Ввести другое название", callback_data='project_id'),
                    InlineKeyboardButton("Вернуться в главное меню", callback_data=CHAT_STATE_BACK)
                    )
-        args = __extract_args(message.text) if command else message.text
+        args = message.text
         if args is not None:
             url = '{0}/api/project.search'.format(config.server(message.chat.id))
             data = {
@@ -404,9 +404,9 @@ def get_images(chat_id, ids):
 
 
 @bot.message_handler(commands=['info'])
-def get_info(message, command=True):
+def get_info(message):
     if checkconfig(message, "check", "boards"):
-        args = __extract_args(message.text) if command else [message.text]
+        args = [message.text]
         if args[0].lower().startswith('t'):
             args[0] = args[0][1:]
         if args[0] is not None:
@@ -460,6 +460,7 @@ def get_info(message, command=True):
                 markup = InlineKeyboardMarkup()
                 markup.add(InlineKeyboardButton("Открыть задачу",
                                                 url="%s/T%s" % (config.server(message.chat.id), args[0])))
+
                 bot.send_chat_action(message.chat.id, 'typing')
                 bot.send_message(message.chat.id, str_message, parse_mode='Markdown', reply_markup=markup)
                 bot.send_chat_action(message.chat.id, 'upload_photo')
@@ -717,7 +718,7 @@ def callback_query(call):
     elif call.data == "ignoremyself":
         bot.delete_message(call.message.chat.id, call.message.message_id)
         myphid = whoami(call.message)
-        ignored_users(call.message, False, myphid['phid'])
+        ignored_users(call.message, myphid['phid'])
     elif call.data == "settings":
         bot.delete_message(call.message.chat.id, call.message.message_id)
         settings(call.message)
@@ -732,6 +733,9 @@ def callback_query(call):
         task_id = call.data.replace("info", "")
         call.message.text = task_id
         get_info(call.message, command=False)
+    elif call.data.startswith('open'):
+        task_id = call.data.replace("open", "")
+        print("Открыта задача %s" % task_id)
     elif call.data.startswith('settings'):
         setting = call.data.replace("settings", "")
         bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -750,8 +754,8 @@ def callback_query(call):
 
 
 @bot.message_handler(commands=['server'])
-def server(message, command=True):
-    args = __extract_args(message.text) if command else [message.text]
+def server(message):
+    args = [message.text]
     if args:
         config.set_server(message.chat.id, args[0])
         bot.answer_callback_query(message.chat.id, "Сервер установлен!")
@@ -862,8 +866,8 @@ def where_apitoken(message):
 
 
 @bot.message_handler(commands=['phab_api'])
-def phab_api(message, command=True):
-    args = __extract_args(message.text) if command else message.text
+def phab_api(message):
+    args = message.text
     if args:
         if args.startswith("api-"):
             config.set_phab_api(message.chat.id, args)
@@ -882,8 +886,8 @@ def phab_api(message, command=True):
 
 
 @bot.message_handler(commands=['frequency'])
-def frequency(message, command=True):
-    args = __extract_args(message.text) if command else [message.text]
+def frequency(message):
+    args = [message.text]
     if not args:
         bot.send_message(message.chat.id,
                          "\u23F0 Частота опроса сервера (минуты): %d" % (config.frequency(message.chat.id) or 2))
@@ -936,8 +940,8 @@ def set_watchtype(message, watchtype):
 
 
 @bot.message_handler(commands=['boards'])
-def boards(message, command=True):
-    args = __extract_args(message.text) if command else message.text.replace('.', '').replace(',', '').split()
+def boards(message):
+    args = message.text.replace('.', '').replace(',', '').split()
     if args:
         for arg in args:
             if not arg.startswith("PHID-PROJ"):
@@ -971,8 +975,8 @@ def unset_boards(message):
 
 
 @bot.message_handler(commands=['ignored_boards'])
-def ignored_boards(message, command=True):
-    args = __extract_args(message.text) if command else message.text.split()
+def ignored_boards(message):
+    args = message.text.split()
     if args:
         for arg in args:
             if not arg.startswith("PHID-PROJ"):
@@ -1000,8 +1004,8 @@ def unset_ignored_boards(message):
 
 
 @bot.message_handler(commands=['ignored_users'])
-def ignored_users(message, command=True, phid=None):
-    args = __extract_args(message.text) if command else (message.text.split() if phid is None else phid.split())
+def ignored_users(message, phid=None):
+    args = (message.text.split() if phid is None else phid.split())
     if args:
         for arg in args:
             if not arg.startswith("PHID-USER"):
@@ -1031,11 +1035,10 @@ def unset_ignored_users(message):
 
 
 @bot.message_handler(commands=['ignored_columns'])
-def ignored_columns(message, command=True):
-    args = __extract_args(message.text) if command else message.text.split()
-    if args:
-        for arg in args:
-            config.set_ignored_columns(message.chat.id, arg)
+def ignored_columns(message):
+    arg = message.text
+    if arg:
+        config.set_ignored_columns(message.chat.id, arg)
         bot.send_message(message.chat.id, "\u2705 Колонка помещена в игнорируемые",
                          reply_markup=back_ignore_markup())
     else:
@@ -1083,29 +1086,29 @@ def setter(message):
                              reply_markup=markup, parse_mode='Markdown')
         return
     if chat_state == CHAT_STATE_SET_SERVER:
-        server(message, False)
+        server(message)
     if chat_state == CHAT_STATE_SET_PHABAPI:
-        phab_api(message, False)
+        phab_api(message)
     if chat_state == CHAT_STATE_SET_BOARDS:
-        boards(message, False)
+        boards(message)
     if chat_state == CHAT_STATE_REMOVE_BOARDS:
         unset_boards(message)
     if chat_state == CHAT_STATE_SET_FREQUENCY:
-        frequency(message, False)
+        frequency(message)
     if chat_state == CHAT_STATE_SET_IGNORED_BOARDS:
-        ignored_boards(message, False)
+        ignored_boards(message)
     if chat_state == CHAT_STATE_REMOVE_IGNORED_BOARDS:
         unset_ignored_boards(message)
     if chat_state == CHAT_STATE_SET_IGNORED_COLUMNS:
-        ignored_columns(message, False)
+        ignored_columns(message)
     if chat_state == CHAT_STATE_REMOVE_IGNORED_COLUMS:
         unset_ignored_columns(message)
     if chat_state == CHAT_STATE_IGNORED_USERS:
-        ignored_users(message, False)
+        ignored_users(message)
     if chat_state == CHAT_STATE_REMOVE_IGNORED_USERS:
         unset_ignored_users(message)
     if chat_state == CHAT_STATE_GET_PROJECT_ID:
-        get_project(message, False)
+        get_project(message)
     state[message.chat.id] = None
 
 

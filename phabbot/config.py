@@ -182,7 +182,7 @@ class Config(dict):
         chat = self.chat(chat_id, False)
         return chat.get('ignored_columns', [])
 
-    def set_ignored_columns(self, chat_id, ignored_columns: list):
+    def set_ignored_columns(self, chat_id, ignored_columns: str):
         chat = self.chat(chat_id, False)
         if 'ignored_columns' not in chat:
             chat['ignored_columns'] = [ignored_columns]
