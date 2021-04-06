@@ -169,6 +169,10 @@ class TaskGetter:
             }
             r = requests.post(url, params=data, verify=False)
             json_dict = r.json()
+            if json_dict.get('error_code') == 'ERR-INVALID-AUTH':
+                TaskGetter.__bot.send_message(self.chat_id, "Возникла проблема с вашим токеном, бот поставлен на паузу")
+                print("У пользователя %s возникла проблема с токеном, бот для него приостановлен" % self.name)
+                return "error"
             if json_dict.get('result') is not None:
                 username = json_dict['result'].get('userName') or \
                            json_dict['result']['data'][0]['fields'].get('username')
@@ -198,8 +202,6 @@ class TaskGetter:
                 return {'username': username, 'realname': realname, 'telegram': telegram}
             else:
                 return {'username': "Не определен", 'realname': "Не определен", 'telegram': "None"}
-        except ConnectionError or requests.exceptions.HTTPError as err:
-            print('При подключении произошла ошибка: %s' % err)
         except Exception as e:
             for user in self.superusers:
                 TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени пользователя, "
@@ -677,12 +679,12 @@ class TaskGetter:
     def __send_results(self, results, act, watchtype):
         assert (results and len(results))
         if act == "new":
-            for result in results.values():
+            for result in results:
                 if result is None:
                     continue
                 print(TaskGetter.__timenow() + ': Для чата ' + str(self.name) +
                       ' обнаружена новая задача - T' + str(result['task_id']))
-                startstr = "На борде *{}* появилась".format(result['board']) if watchtype != 2 else "На вас назначена"
+                startstr = "На вас назначена" if watchtype == 2 else "На борде *{}* появилась".format(result['board'])
                 resultstr = '{} новая задача ' \
                             'с *{}* приоритетом: \n\U0001F4CA *T{} - {}* \n' \
                             '\U0001F425 Инициатор: *{}*\n' \
@@ -695,6 +697,7 @@ class TaskGetter:
                                                                     )
                 TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='Markdown',
                                               reply_markup=self.full_markup(result['task_id']))
+                self.__new_sended_ids.append(int(result['task_id']))
                 self.__new_ids.append(int(result['task_id']))
 
         elif act == "upd":
@@ -860,10 +863,10 @@ class TaskGetter:
                 "api.token": self.phab_api,
             }
 
-            if watchtype == 1:
-                data.update({"constraints[projects][0]": subj})
-            elif watchtype == 2:
+            if watchtype == 2:
                 data.update({"constraints[assigned][0]": subj})
+            elif watchtype == 1:
+                data.update({"constraints[projects][0]": subj})
             else:
                 data.update({"constraints[projects][0]": subj})
 
@@ -900,7 +903,9 @@ class TaskGetter:
             if new_parsed is not None:
                 new_tasks = []
                 for task in range(len(new_parsed)):
-                    if new_parsed[task]['id'] not in self.__new_sended_ids:
+                    if new_parsed.get(task) is None:
+                        continue
+                    if new_parsed.get(task).get('task_id') not in self.__new_sended_ids:
                         new_tasks.append(new_parsed[task])
                 self.__send_results(new_tasks, "new", watchtype)
 
@@ -927,8 +932,19 @@ class TaskGetter:
                 search_worker(board, 1)
             search_worker(self.__whoami(), 2)
 
+    def checkconnection(self):
+        try:
+            requests.post(self.server)
+            return True
+        except requests.exceptions.RequestException as e:
+            print("Произошла ошибка соединения: %s" % e)
+            return False
+        except Exception as e:
+            print("Произошла непредвиденная ошибка: %s" % e)
+            return False
+
     def tasks_search(self):
-        if self.__whoami() is None:
+        if not self.checkconnection:
             return
         try:
             self.__tasks_search()
@@ -966,6 +982,9 @@ class TaskGetter:
             task_getter = TaskGetter(config)
             assert task_getter.chat_id is not None
             if TaskGetter.__active_tasks.get(task_getter.chat_id):
+                return
+            if task_getter.__whoami() == "error":
+                chat_config['active'] = False
                 return
             task_getter.tasks_search()
             TaskGetter.__active_tasks[task_getter.chat_id] = \

@@ -732,7 +732,7 @@ def callback_query(call):
     elif call.data.startswith('info'):
         task_id = call.data.replace("info", "")
         call.message.text = task_id
-        get_info(call.message, command=False)
+        get_info(call.message)
     elif call.data.startswith('open'):
         task_id = call.data.replace("open", "")
         print("Открыта задача %s" % task_id)
@@ -1075,14 +1075,15 @@ def setter(message):
     if message.text[:1] == "/":
         state[message.chat.id] = None
         return
-    if re.match(r'(t\d+)', message.text.lower()):
+    tid = re.match(r'(t\d+)', message.text.lower())
+    if tid:
         state[message.chat.id] = None
         if message.chat.type == "private":
-            get_info(message, command=False)
+            get_info(message)
         else:
             markup = InlineKeyboardMarkup()
             markup.add(InlineKeyboardButton("Да", callback_data='info' + message.text))
-            bot.send_message(message.chat.id, "Хотите получить информацию о задаче *%s*?" % message.text.capitalize(),
+            bot.send_message(message.chat.id, "Хотите получить информацию о задаче *%s*?" % tid.group(0).capitalize(),
                              reply_markup=markup, parse_mode='Markdown')
         return
     if chat_state == CHAT_STATE_SET_SERVER:
