@@ -510,6 +510,8 @@ class TaskGetter:
         return telegramstr
 
     def genphablink(self, user):
+        if user == "Не определен":
+            return "Удалён"
         phab_link = "[Профиль](%s/p/%s/)" % (self.server, user)
         return phab_link
 
