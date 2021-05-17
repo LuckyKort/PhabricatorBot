@@ -2,15 +2,15 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import requests
 import telebot
 import re
-# import logging
+import logging
 import os
 from phabbot.config import Config
 from phabbot.task_getter import TaskGetter
 from time import strftime, localtime
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 
-# logger = telebot.logger
-# telebot.logger.setLevel(logging.DEBUG)
+logger = telebot.logger
+telebot.logger.setLevel(logging.WARNING)
 
 CHAT_STATE_SET_SERVER = "set_server"
 CHAT_STATE_SET_PHABAPI = "set_phab_api"
@@ -945,7 +945,7 @@ def boards(message):
     if args:
         for arg in args:
             if not arg.startswith("PHID-PROJ"):
-                bot.send_message(message.chat.id, "\u274C Указанный вами PHID <b>%s</b> не является PHID'ом проекта"
+                bot.send_message(message.chat.id, "\u274C Указанный вами PHID <b>%s</b> не является PHID'ом проекта "
                                                   "и добавлен не будет" % arg, parse_mode='HTML')
                 continue
             config.set_boards(message.chat.id, arg)
@@ -980,11 +980,12 @@ def ignored_boards(message):
     if args:
         for arg in args:
             if not arg.startswith("PHID-PROJ"):
-                bot.send_message(message.chat.id, "\u274C Указанный вами PHID <b>%s</b> не является PHID'ом проекта"
+                bot.send_message(message.chat.id, "\u274C Указанный вами PHID <b>%s</b> не является PHID'ом проекта "
                                                   "и добавлен не будет" % arg, parse_mode='HTML')
                 continue
             config.set_ignored_boards(message.chat.id, arg)
-        bot.send_message(message.chat.id, "\u2705 Борд добавлен в игнорируемые", reply_markup=back_ignore_markup())
+            bot.send_message(message.chat.id, "\u2705 Борд %s добавлен в игнорируемые" % arg,
+                             reply_markup=back_ignore_markup())
     else:
         bot.send_message(message.chat.id, "\U0001F648 Борды, перемещения по которым игнорируются: \n%s" %
                          (getptojectname(message, "phids", config.ignored_boards(message.chat.id)) or
@@ -1005,16 +1006,16 @@ def unset_ignored_boards(message):
 
 @bot.message_handler(commands=['ignored_users'])
 def ignored_users(message, phid=None):
-    args = (message.text.split() if phid is None else phid.split())
-    if args:
-        for arg in args:
-            if not arg.startswith("PHID-USER"):
-                bot.send_message(message.chat.id, "\u274C Указанный вами PHID <b>%s</b> не является PHID'ом "
-                                                  "пользователя и добавлен не будет" % arg, parse_mode='HTML')
-                continue
+    arg = message.text if phid is None else phid
+    if arg:
+        if not arg.startswith("PHID-USER"):
+            bot.send_message(message.chat.id, "\u274C Указанный вами PHID <b>%s</b> не является PHID'ом "
+                                              "пользователя и добавлен не будет" % arg, parse_mode='HTML',
+                             reply_markup=back_ignore_markup())
+        else:
             config.set_ignored_users(message.chat.id, arg)
-        bot.send_message(message.chat.id, "\u2705 Пользователь добавлен в игнориуемые",
-                         reply_markup=back_ignore_markup())
+            bot.send_message(message.chat.id, "\u2705 Пользователь добавлен в игнориуемые",
+                             reply_markup=back_ignore_markup())
     else:
         bot.send_message(message.chat.id, "\U0001F648 Пользователи, действия которых игнорируются: \n%s" %
                          (getusername(message, config.ignored_users(message.chat.id)) or

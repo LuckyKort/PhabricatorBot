@@ -15,6 +15,7 @@ setup(
         'telebot',
         'pyTelegramBotAPI',
         'schedule',
-        'json'
+        'json',
+        'urllib3'
     ]
 )

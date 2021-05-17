@@ -1,15 +1,17 @@
+import json
+import logging
+import re
+import time
 from datetime import datetime
 from email import utils
 from threading import Thread
 from time import strftime, localtime
-import re
 import requests
 import schedule
 import telebot
-import time
-import logging
-import json
+import urllib3.exceptions
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+
 from .config import Config
 
 logging.basicConfig(filename="bot.log", level=logging.DEBUG)
@@ -201,7 +203,7 @@ class TaskGetter:
                 telegram = json_dict['result']['data'][0]['fields']['custom.Telegram']
                 return {'username': username, 'realname': realname, 'telegram': telegram}
             else:
-                return {'username': "Не определен", 'realname': "Не определен", 'telegram': "None"}
+                return {'username': "Не определен", 'realname': "Не определен", 'telegram': None}
         except Exception as e:
             for user in self.superusers:
                 TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени пользователя, "
@@ -393,7 +395,7 @@ class TaskGetter:
     def __getpriority(self, value):
         try:
             task_prior = {
-                10: ("Whishlist", "wishlist", "wishlist"),
+                0: ("Wishlist", "wishlist", "wishlist"),
                 25: ("Низкий", "низким", "низкого"),
                 50: ("Средний", "средним", "среднего"),
                 80: ("Высокий", "высоким", "высокого"),
@@ -453,11 +455,15 @@ class TaskGetter:
                             task_prior = self.__getpriority(prior)[1]
                             owner = json_dict['result']['data'][i]['fields']['ownerPHID']
                             task_owner = self.__whois(owner)
-                            task_owner_tg = TaskGetter.gentglink(task_owner['telegram'])
-                            task_owner_str = task_owner['realname'] + task_owner_tg
+                            task_owner_phab = self.genphablink(task_owner['username'])
+                            task_owner_tg = self.escapetgsymb(TaskGetter.gentglink(task_owner['telegram']))
+                            task_owner_link = task_owner_tg if task_owner_tg is not None else task_owner_phab
+                            task_owner_str = "*%s* (%s)" % (task_owner['realname'], task_owner_link)
                             task_author = self.__whois(author)
-                            task_author_tg = TaskGetter.gentglink(task_author['telegram'])
-                            task_author_str = task_author['realname'] + task_author_tg
+                            task_author_phab = self.genphablink(task_author['username'])
+                            task_author_tg = self.escapetgsymb(TaskGetter.gentglink(task_author['telegram']))
+                            task_author_link = task_author_tg if task_author_tg is not None else task_author_phab
+                            task_author_str = "*%s* (%s)" % (task_author['realname'], task_author_link)
                             task_summary = {"task_id": task_id,
                                             "board": board,
                                             "project": project,
@@ -495,13 +501,17 @@ class TaskGetter:
     @staticmethod
     def gentglink(tgstr):
         if tgstr is None:
-            return ""
+            return None
         if tgstr.endswith("/"):
             tgstr = tgstr[0:-1]
         remove_tme = re.split(r'/', tgstr)[-1]
         atsymb = "" if remove_tme.startswith("@") else "@"
-        telegramstr = " (%s%s)" % (atsymb, remove_tme)
+        telegramstr = "%s%s" % (atsymb, remove_tme.strip())
         return telegramstr
+
+    def genphablink(self, user):
+        phab_link = "[Профиль](%s/p/%s/)" % (self.server, user)
+        return phab_link
 
     def __getupdates(self, ids, task_time):
         try:
@@ -527,9 +537,15 @@ class TaskGetter:
                             if 3 not in self.settings:
                                 task_id = task['result'][curr_id][j]['taskID']
                                 oldowner = self.__whois(task['result'][curr_id][j]['oldValue'])
-                                oldownerstr = oldowner['realname'] + TaskGetter.gentglink(oldowner['telegram'])
+                                oldowner_tg = self.escapetgsymb(TaskGetter.gentglink(oldowner['telegram']))
+                                oldowner_phab = self.genphablink(oldowner['username'])
+                                oldowner_link = oldowner_tg if oldowner_tg is not None else oldowner_phab
+                                oldownerstr = "*%s* (%s)" % (oldowner['realname'], oldowner_link)
                                 newowner = self.__whois(task['result'][curr_id][j]['newValue'])
-                                newownerstr = newowner['realname'] + TaskGetter.gentglink(newowner['telegram'])
+                                newowner_tg = self.escapetgsymb(TaskGetter.gentglink(newowner['telegram']))
+                                newowner_phab = self.genphablink(newowner['username'])
+                                newowner_link = newowner_tg if newowner_tg is not None else newowner_phab
+                                newownerstr = "*%s* (%s)" % (newowner['realname'], newowner_link)
                                 upd_summary[curr_num] = {"action": "reassign",
                                                          "name": name['name'],
                                                          "task_id": task_id,
@@ -592,7 +608,10 @@ class TaskGetter:
                                 else:
                                     comment = "Комментарий удален"
                                 author = self.__whois(task['result'][curr_id][j]['authorPHID'])
-                                authorstr = author['realname'] + TaskGetter.gentglink(author['telegram'])
+                                author_tg = self.escapetgsymb(TaskGetter.gentglink(author['telegram']))
+                                author_phab = self.genphablink(author['username'])
+                                author_link = author_tg if author_tg is not None else author_phab
+                                authorstr = "%s (%s)" % (author['realname'], author_link)
                                 if comment.count('*') % 2 != 0:
                                     comment = comment + "*"
                                 upd_summary[curr_num] = {"action": "comment",
@@ -676,6 +695,29 @@ class TaskGetter:
             print('При получении обновлений произошла ошибка: ', e)
             return None
 
+    @staticmethod
+    def escapetgsymb(string):
+        if string is None:
+            return None
+        escapedrstr = string.replace('-', '\\-') \
+                            .replace('(', '\\(') \
+                            .replace(')', '\\)') \
+                            .replace('_', '\\_') \
+                            .replace('[', '\\[') \
+                            .replace(']', '\\]') \
+                            .replace('~', '\\~') \
+                            .replace('`', '\\`') \
+                            .replace('>', '\\>') \
+                            .replace('#', '\\#') \
+                            .replace('+', '\\+') \
+                            .replace('=', '\\=') \
+                            .replace('|', '\\|') \
+                            .replace('{', '\\{') \
+                            .replace('}', '\\}') \
+                            .replace('.', '\\.') \
+                            .replace('!', '\\!')
+        return escapedrstr
+
     def __send_results(self, results, act, watchtype):
         assert (results and len(results))
         if act == "new":
@@ -687,8 +729,8 @@ class TaskGetter:
                 startstr = "На вас назначена" if watchtype == 2 else "На борде *{}* появилась".format(result['board'])
                 resultstr = '{} новая задача ' \
                             'с *{}* приоритетом: \n\U0001F4CA *T{} - {}* \n' \
-                            '\U0001F425 Инициатор: *{}*\n' \
-                            '\U0001F425 Исполнитель: *{}*\n'.format(startstr,
+                            '\U0001F425 Инициатор: {}\n' \
+                            '\U0001F425 Исполнитель: {}\n'.format(startstr,
                                                                     result['priority'],
                                                                     result['task_id'],
                                                                     result['name'],
@@ -701,7 +743,7 @@ class TaskGetter:
                 self.__new_ids.append(int(result['task_id']))
 
         elif act == "upd":
-            def sendupd(head, body):
+            def sendupd(head, body, reassignstr=""):
                 if res_dict[result['task_id']] > 1:
                     result_messages[result['task_id']]['message'].append(
                         "\n\U0001F4DD " + body[0].upper() + body[1:]
@@ -709,7 +751,8 @@ class TaskGetter:
                 else:
                     print(self.__timenow() + ': Для чата ' + str(self.name) +
                           ' обнаружена обновленная задача - T' + result['task_id'])
-                    TaskGetter.__bot.send_message(self.chat_id, head + body, parse_mode='Markdown',
+                    resultstring = head + body
+                    TaskGetter.__bot.send_message(self.chat_id, resultstring, parse_mode='Markdown',
                                                   reply_markup=self.full_markup(result['task_id']))
 
             result_list = [res for res in results.values() if int(res['task_id']) not in self.__new_ids]
@@ -734,8 +777,8 @@ class TaskGetter:
                 if result['action'] == "reassign":
                     headstr = '\U0001F4CA В задаче *T{} - {}* '.format(result['task_id'], result['name'])
                     resultstr = 'изменен исполнитель: \n' \
-                                '\U0001F425 Предыдущий исполнитель: *{}*\n' \
-                                '\U0001F425 Новый исполнитель: *{}*\n'.format(result['oldowner'],
+                                '\U0001F425 Предыдущий исполнитель: {}\n' \
+                                '\U0001F425 Новый исполнитель: {}\n'.format(result['oldowner'],
                                                                               result['newowner'])
                     sendupd(headstr, resultstr)
 
@@ -839,6 +882,15 @@ class TaskGetter:
                 self.last_new_check = {}
             if not self.last_update_check:
                 self.last_update_check = {}
+
+            # OPTIONAL: Проверяет, если дата последней проверки больше дня, то сбрасываем счетчик.
+            if self.last_new_check.get(subj):
+                if self.__timestamp() - self.last_new_check.get(subj) >= 86400:
+                    self.last_new_check[subj] = self.__timestamp()
+
+            if self.last_update_check.get(subj):
+                if self.__timestamp() - self.last_update_check.get(subj) >= 86400:
+                    self.last_update_check[subj] = self.__timestamp()
 
             if not self.last_new_check.get(subj):
                 self.last_new_check[subj] = self.__timestamp()
@@ -1032,6 +1084,9 @@ class TaskGetter:
                 thread = Thread(target=TaskGetter.schedule)
             thread.start()
             TaskGetter.__bot.polling(none_stop=True)
+        except urllib3.exceptions.MaxRetryError as e:
+            print('MAXRETRIES - Произошла ошибка: ' + str(e))
+            time.sleep(60)
         except Exception as e:
             print('Произошла ошибка: ' + str(e))
             TaskGetter.__stop_threads = True
