@@ -595,7 +595,9 @@ class TaskGetter:
                                     replace_links = re.sub(r'\[\[(.*?)]]',
                                                            linktext[0] if len(linktext) > 0
                                                            else "ссылка", replace_attach)
-                                    comment_screen = (replace_links.replace("_", "\\_")
+                                    quote_replace = re.sub(r'\>\>(.*?)\\n\\n', '(Цитируемый комментарий)\n',
+                                                           replace_links)
+                                    comment_screen = (quote_replace.replace("_", "\\_")
                                                                    .replace("*", "\\*")
                                                                    .replace("[", "\\[")
                                                                    .replace("`", "\\`")
