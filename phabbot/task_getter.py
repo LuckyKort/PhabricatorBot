@@ -438,13 +438,15 @@ class TaskGetter:
         try:
             if json_dict.get('result') == 'error':
                 print("Ошибка при парсинге: %s" % json_dict)
+                for user in self.superusers:
+                    TaskGetter.__bot.send_message(user, "Ошибка при парсинге: %s, проверьте консоль" % json_dict)
                 return None
             if act == "new":
                 new_tasks = {}
                 if 1 not in self.settings:
                     if len(json_dict['result']['data']) > 0:
                         for i in range(len(json_dict['result']['data'])):
-                            author = json_dict['data'][i]['fields']['authorPHID']
+                            author = json_dict['result']['data'][i]['fields']['authorPHID']
                             if author in self.ignored_users:
                                 new_tasks[i] = None
                                 continue
