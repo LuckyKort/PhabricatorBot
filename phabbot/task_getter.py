@@ -436,12 +436,15 @@ class TaskGetter:
 
     def __parse_results(self, json_dict, act, board):
         try:
+            if json_dict.get('result') == 'error':
+                print("Ошибка при парсинге: %s" % json_dict)
+                return None
             if act == "new":
                 new_tasks = {}
                 if 1 not in self.settings:
                     if len(json_dict['result']['data']) > 0:
                         for i in range(len(json_dict['result']['data'])):
-                            author = json_dict['result']['data'][i]['fields']['authorPHID']
+                            author = json_dict['data'][i]['fields']['authorPHID']
                             if author in self.ignored_users:
                                 new_tasks[i] = None
                                 continue
@@ -1091,6 +1094,8 @@ class TaskGetter:
         except urllib3.exceptions.MaxRetryError as e:
             print('MAXRETRIES - Произошла ошибка: ' + str(e))
             time.sleep(60)
+        except telebot.apihelper.ApiException as e:
+            print("Бот заблочен, не могу отправить сообщение: " + e)
         except Exception as e:
             print('Произошла ошибка: ' + str(e))
             TaskGetter.__stop_threads = True
