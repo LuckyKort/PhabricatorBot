@@ -1103,18 +1103,10 @@ class TaskGetter:
             if thread is None:
                 thread = Thread(target=TaskGetter.schedule)
             thread.start()
-            TaskGetter.__bot.infinity_polling(timeout=10, long_polling_timeout=5)
-        except urllib3.exceptions.MaxRetryError as e:
-            print('MAXRETRIES - Произошла ошибка: ' + str(e))
-            time.sleep(60)
-        except telebot.apihelper.ApiException as e:
-            print("Бот заблочен, не могу отправить сообщение: " + e)
-        except requests.exceptions.ConnectionError as e:
-            print('Произошла ошибка соединения: ' + str(e))
-            pass
-        except Exception as e:
-            logging.warning(e)
-            print('Произошла ошибка: ' + str(e))
+            TaskGetter.__bot.polling(none_stop=True)
+        except:
+            print('Произошла ошибка')
+            TaskGetter.__bot.stop_polling()
             TaskGetter.__stop_threads = True
             time.sleep(15)
         finally:
