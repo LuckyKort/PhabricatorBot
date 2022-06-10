@@ -170,6 +170,9 @@ class TaskGetter:
                 "api.token": self.phab_api
             }
             r = requests.post(url, params=data, verify=False)
+            if not self.validatejson(r.text):
+                print("JSON - говно")
+                return None
             json_dict = r.json()
             if json_dict.get('error_code') == 'ERR-INVALID-AUTH':
                 TaskGetter.__bot.send_message(self.chat_id, "Возникла проблема с вашим токеном, бот поставлен на паузу")
@@ -182,9 +185,9 @@ class TaskGetter:
             else:
                 return None
         except Exception as e:
-            for user in self.superusers:
-                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени пользователя, "
-                                                    "проверьте консоль")
+            # for user in self.superusers:
+            #     TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени пользователя, "
+            #                                         "проверьте консоль")
             print('При получении имени пользователя произошла ошибка:', e)
             return None
 
@@ -197,6 +200,9 @@ class TaskGetter:
                     "constraints[phids][0]": phid,
                 }
                 r = requests.post(url, params=data, verify=False)
+                if not self.validatejson(r.text):
+                    print("JSON - говно")
+                    return {'username': "Не определен", 'realname': "Не определен", 'telegram': None}
                 json_dict = r.json()
                 username = json_dict['result']['data'][0]['fields']['username']
                 realname = json_dict['result']['data'][0]['fields']['realName']
@@ -205,9 +211,9 @@ class TaskGetter:
             else:
                 return {'username': "Не определен", 'realname': "Не определен", 'telegram': None}
         except Exception as e:
-            for user in self.superusers:
-                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени пользователя, "
-                                                    "проверьте консоль")
+            # for user in self.superusers:
+                # TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени пользователя, "
+                #                                     "проверьте консоль")
             print('При получении имени пользователя произошла ошибка: ', e)
             return None
 
@@ -292,9 +298,9 @@ class TaskGetter:
             else:
                 return None
         except Exception as e:
-            for user in self.superusers:
-                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении информации о задаче, "
-                                                    "проверьте консоль")
+            # for user in self.superusers:
+            #     TaskGetter.__bot.send_message(user, "Произошла ошибка при получении информации о задаче, "
+            #                                         "проверьте консоль")
             print('При получении информации о задаче произошла ошибка: ', e)
             return None
 
@@ -318,9 +324,9 @@ class TaskGetter:
             else:
                 return "Неизвестен"
         except Exception as e:
-            for user in self.superusers:
-                TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени колонки, "
-                                                    "проверьте консоль")
+            # for user in self.superusers:
+            #     TaskGetter.__bot.send_message(user, "Произошла ошибка при получении имени колонки, "
+            #                                         "проверьте консоль")
             print('При получении имени колонки произошла ошибка: ', e)
             return None
 
@@ -533,6 +539,8 @@ class TaskGetter:
                     }
                     r = requests.post(url, params=data, verify=False)
                     task = r.json()
+                    if not self.validatejson(r.text):
+                        return None
                     curr_id = str(ids[i])
                     for j in range(len(task['result'][curr_id])):
                         if int(task['result'][curr_id][j]['dateCreated']) < task_time:
@@ -882,6 +890,14 @@ class TaskGetter:
                 TaskGetter.__bot.send_message(self.chat_id, resultstr, parse_mode='Markdown',
                                               reply_markup=self.full_markup(message['id']))
 
+    @staticmethod
+    def validatejson(jsondata):
+        try:
+            json.loads(jsondata)
+        except ValueError as err:
+            return False
+        return True
+
     def __tasks_search(self):
         def search_worker(subj, watchtype):
             def search():
@@ -942,20 +958,13 @@ class TaskGetter:
             self.last_update_check[subj] = TaskGetter.__serverdate_to_timestamp(upd_r.headers['date'])
             TaskGetter.__config.dump()
 
-            def validatejson(jsondata):
-                try:
-                    json.loads(jsondata)
-                except ValueError as err:
-                    return False
-                return True
-
-            if validatejson(new_r.text):
+            if self.validatejson(new_r.text):
                 new_parsed = self.__parse_results(new_r.json(), "new", subj)
             else:
                 print("JSON новых задач некорректен")
                 new_parsed = None
 
-            if validatejson(upd_r.text):
+            if self.validatejson(upd_r.text):
                 upd_parsed = self.__parse_results(upd_r.json(), "upd", subj)
             else:
                 print("JSON обновленных задач некорректен")
@@ -1008,6 +1017,8 @@ class TaskGetter:
         if not self.checkconnection:
             return
         try:
+            if self.__whoami() is None:
+                return
             self.__tasks_search()
         except Exception as e:
             print(e)
@@ -1071,7 +1082,7 @@ class TaskGetter:
                     time.sleep(1)
                 except Exception as e:
                     print("Шеф, усё пропало. Ложусь спать на 15 сек")
-                    time.sleep(15)
+                time.sleep(15)
 
     @staticmethod
     def info(chat_id: int or None = None, value=False):
@@ -1092,13 +1103,17 @@ class TaskGetter:
             if thread is None:
                 thread = Thread(target=TaskGetter.schedule)
             thread.start()
-            TaskGetter.__bot.polling(none_stop=True)
+            TaskGetter.__bot.infinity_polling(timeout=10, long_polling_timeout=5)
         except urllib3.exceptions.MaxRetryError as e:
             print('MAXRETRIES - Произошла ошибка: ' + str(e))
             time.sleep(60)
         except telebot.apihelper.ApiException as e:
             print("Бот заблочен, не могу отправить сообщение: " + e)
+        except requests.exceptions.ConnectionError as e:
+            print('Произошла ошибка соединения: ' + str(e))
+            pass
         except Exception as e:
+            logging.warning(e)
             print('Произошла ошибка: ' + str(e))
             TaskGetter.__stop_threads = True
             time.sleep(15)

@@ -205,7 +205,7 @@ def checkconfig(message, act, skip=None):
                 err = json['error_info']
                 if "msg" not in skip:
                     bot.send_message(chatid, "Произошла ошибка: " + err +
-                                     "\n\n*Проверьте правильность введенного API-Токена и повторите попытку*",
+                                     "\n\n*Проверьте правильнfость введенного API-Токена и повторите попытку*",
                                      parse_mode="Markdown")
                 return False
             if "activated" in json['result']['roles']:
