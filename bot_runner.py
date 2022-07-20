@@ -1086,3 +1086,5 @@ if __name__ == '__main__':
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
     TaskGetter.configure(config, bot)
     TaskGetter.main_loop()
+
+    print("test gihub integration")
