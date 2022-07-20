@@ -22,5 +22,3 @@ Phabricator notifications telegram bot
 - Find bot in Telegram and click start or add it in group chat
 - Enter `/menu` command to get the bot's main menu
 - Follow bot's instructions to setup
-
-Test
